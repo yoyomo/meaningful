@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Meaningful Backend - Serverless application for scheduling calls with friends'
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment stage
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.11
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        USERS_TABLE: !Ref UsersTable
+        CALENDARS_TABLE: !Ref CalendarsTable
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowOrigin: "'*'"
+
+Resources:
+  # API Gateway
+  MeaningfulApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  # Lambda Functions
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers.auth.handler
+      Events:
+        GoogleAuth:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /auth/google
+            Method: POST
+        AuthCallback:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /auth/callback
+            Method: GET
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+
+  CalendarFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers.calendar.handler
+      Events:
+        CalendarSync:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /calendar/sync
+            Method: POST
+        GetEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /calendar/events
+            Method: GET
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CalendarsTable
+
+  # DynamoDB Tables
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'meaningful-${Stage}-users'
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  CalendarsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'meaningful-${Stage}-calendars'
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: calendar_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: calendar_id
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+Outputs:
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${MeaningfulApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/'
+    Export:
+      Name: !Sub 'meaningful-${Stage}-api-url'
+  
+  UsersTableName:
+    Description: 'DynamoDB Users table name'
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub 'meaningful-${Stage}-users-table'
+  
+  CalendarsTableName:
+    Description: 'DynamoDB Calendars table name'
+    Value: !Ref CalendarsTable
+    Export:
+      Name: !Sub 'meaningful-${Stage}-calendars-table'

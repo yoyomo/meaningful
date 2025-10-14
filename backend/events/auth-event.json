@@ -1,0 +1,14 @@
+{
+  "httpMethod": "POST",
+  "path": "/auth/google",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"redirect_uri\": \"http://localhost:3000/auth/callback\"}",
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "requestContext": {
+    "httpMethod": "POST",
+    "path": "/auth/google"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "httpMethod": "GET",
+  "path": "/auth/callback",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": null,
+  "queryStringParameters": {
+    "code": "test_auth_code_123",
+    "state": "test_state"
+  },
+  "pathParameters": null,
+  "requestContext": {
+    "httpMethod": "GET",
+    "path": "/auth/callback"
+  }
+}

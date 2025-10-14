@@ -1,0 +1,6 @@
+# Development dependencies for linting and testing
+black==23.12.1
+flake8==7.0.0
+pytest==7.4.4
+pytest-cov==4.1.0
+moto==4.2.14

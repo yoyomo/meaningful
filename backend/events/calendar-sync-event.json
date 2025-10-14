@@ -1,0 +1,15 @@
+{
+  "httpMethod": "POST",
+  "path": "/calendar/sync",
+  "headers": {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer test_token_123"
+  },
+  "body": "{\"user_id\": \"test_user_123\"}",
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "requestContext": {
+    "httpMethod": "POST",
+    "path": "/calendar/sync"
+  }
+}
