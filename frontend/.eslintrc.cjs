@@ -20,5 +20,7 @@ module.exports = {
       'warn',
       { allowConstantExport: true },
     ],
+    'prefer-arrow-callback': 'error',
+    'func-style': ['error', 'expression'],
   },
 }

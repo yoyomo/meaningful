@@ -3,3 +3,4 @@ google-auth==2.25.2
 google-auth-oauthlib==1.2.0
 google-api-python-client==2.110.0
 pyjwt==2.8.0
+requests==2.31.0

@@ -90,7 +90,7 @@ lint-backend: ## Run backend linter
 
 format: ## Format code for both frontend and backend
 	@echo "💅 Formatting code..."
-	@cd frontend && pnpm prettier --write src/
+	@cd frontend && pnpm prettier --write src/ && pnpm lint --fix
 	@cd backend && black src/ --line-length=88
 
 format-frontend: ## Format frontend code

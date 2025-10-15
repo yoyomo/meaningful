@@ -79,6 +79,10 @@ Run `make help` to see all available commands:
 - `make format` - Format all code
 - `make deploy` - Deploy to AWS
 
+### Code Style
+- Arrow functions enforced by ESLint: `const fn = () => {}`
+- Auto-formatting with `make format`
+
 ## Development Status
 - ✅ Initial project setup
 - 🚧 Google authentication (next)
