@@ -33,11 +33,11 @@ class GoogleOAuthService:
         # Google OAuth scopes - what permissions we need
         self.scopes = [
             'openid',
-            'email',
-            'profile',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/user.phonenumbers.read',
             'https://www.googleapis.com/auth/calendar.readonly',
-            'https://www.googleapis.com/auth/contacts.readonly'
+            'https://www.googleapis.com/auth/contacts.readonly',
         ]
     
     def get_authorization_url(self) -> str:

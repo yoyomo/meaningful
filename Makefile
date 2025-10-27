@@ -136,7 +136,11 @@ validate: ## Validate SAM template
 # Database
 db-local: ## Start local DynamoDB for testing
 	@echo "🗄️  Starting local DynamoDB..."
-	@docker run -p 8000:8000 amazon/dynamodb-local
+	@docker run -p 8000:8000 -d amazon/dynamodb-local
+	@echo "✅ DynamoDB running on http://localhost:8000"
+	
+db-local-stop: ## Stop local DynamoDB
+	@docker stop $$(docker ps -q --filter ancestor=amazon/dynamodb-local) || true
 
 # Preview
 preview-frontend: ## Preview production build locally
