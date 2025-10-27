@@ -144,12 +144,12 @@ preview-frontend: ## Preview production build locally
 	@cd frontend && pnpm preview
 
 # Environment
-env-setup: ## Copy .env.dist files to .env for local development
+env-setup: ## Copy locals.json.example to locals.json and .env.dist files to .env for local development
 	@echo "📝 Setting up environment files..."
 	@cp frontend/.env.dist frontend/.env || echo "Frontend .env.dist not found"
-	@cp backend/src/.env.dist backend/src/.env || echo "Backend .env.dist not found"
+	@cp backend/locals.json.example backend/locals.json || echo "Backend locals.json.example not found"
 	@echo "✅ Environment files created"
-	@echo "📝 Edit frontend/.env and backend/src/.env with your values"
+	@echo "📝 Edit frontend/.env and backend/locals.json with your values"
 
 google-setup: ## Show Google OAuth setup instructions
 	@echo "🔑 Google OAuth Setup Required"
@@ -157,7 +157,8 @@ google-setup: ## Show Google OAuth setup instructions
 	@echo "1. Go to: https://console.cloud.google.com/"
 	@echo "2. Create project → Enable APIs (Calendar, People)"  
 	@echo "3. Create OAuth credentials"
-	@echo "4. Set environment variables"
+	@echo "4. Copy backend/locals.json.example to backend/locals.json"
+	@echo "5. Add your credentials to backend/locals.json"
 	@echo ""
 	@echo "📖 Full instructions: cat GOOGLE_OAUTH_SETUP.md"
 	@echo ""

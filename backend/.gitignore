@@ -1,6 +1,7 @@
 # SAM Build artifacts
 .aws-sam/
 samconfig.toml
+locals.json
 
 # Python
 __pycache__/
