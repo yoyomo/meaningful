@@ -12,7 +12,7 @@ setup: ## Initial project setup (install all dependencies)
 	@echo "📦 Installing frontend dependencies..."
 	@cd frontend && pnpm install
 	@echo "🐍 Installing backend dependencies..."
-	@cd backend && pip install -r requirements.txt -r requirements-dev.txt
+	@cd backend && pip install -r src/requirements.txt -r src/requirements-dev.txt
 	@echo "✅ Setup complete!"
 	@echo ""
 	@echo "📋 Next steps:"
@@ -122,7 +122,7 @@ check-deps: ## Check for dependency updates
 update-deps: ## Update dependencies
 	@echo "⬆️  Updating dependencies..."
 	@cd frontend && pnpm update
-	@cd backend && pip install -r requirements.txt --upgrade
+	@cd backend && pip install -r src/requirements.txt --upgrade
 
 # AWS Utilities
 logs: ## View backend logs
@@ -144,16 +144,24 @@ preview-frontend: ## Preview production build locally
 	@cd frontend && pnpm preview
 
 # Environment
-env-example: ## Create example environment files
-	@echo "📝 Creating example environment files..."
-	@echo "# Frontend Environment Variables" > frontend/.env.example
-	@echo "VITE_API_URL=http://localhost:3001" >> frontend/.env.example
-	@echo "VITE_GOOGLE_CLIENT_ID=your_google_client_id" >> frontend/.env.example
-	@echo "" >> frontend/.env.example
-	@echo "# Backend Environment Variables" > backend/.env.example
-	@echo "GOOGLE_CLIENT_ID=your_google_client_id" >> backend/.env.example
-	@echo "GOOGLE_CLIENT_SECRET=your_google_client_secret" >> backend/.env.example
-	@echo "JWT_SECRET=your_jwt_secret" >> backend/.env.example
+env-setup: ## Copy .env.dist files to .env for local development
+	@echo "📝 Setting up environment files..."
+	@cp frontend/.env.dist frontend/.env || echo "Frontend .env.dist not found"
+	@cp backend/src/.env.dist backend/src/.env || echo "Backend .env.dist not found"
+	@echo "✅ Environment files created"
+	@echo "📝 Edit frontend/.env and backend/src/.env with your values"
+
+google-setup: ## Show Google OAuth setup instructions
+	@echo "🔑 Google OAuth Setup Required"
+	@echo ""
+	@echo "1. Go to: https://console.cloud.google.com/"
+	@echo "2. Create project → Enable APIs (Calendar, People)"  
+	@echo "3. Create OAuth credentials"
+	@echo "4. Set environment variables"
+	@echo ""
+	@echo "📖 Full instructions: cat GOOGLE_OAUTH_SETUP.md"
+	@echo ""
+	@echo "🚀 After setup, run: make dev"
 
 # Status
 status: ## Show development status

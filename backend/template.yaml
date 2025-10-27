@@ -8,6 +8,21 @@ Parameters:
     Default: dev
     AllowedValues: [dev, staging, prod]
     Description: Deployment stage
+  
+  GoogleClientId:
+    Type: String
+    Description: Google OAuth Client ID
+    NoEcho: true
+  
+  GoogleClientSecret:
+    Type: String
+    Description: Google OAuth Client Secret  
+    NoEcho: true
+  
+  FrontendUrl:
+    Type: String
+    Default: 'http://localhost:3000'
+    Description: Frontend URL for OAuth redirects
 
 Globals:
   Function:
@@ -18,6 +33,9 @@ Globals:
         STAGE: !Ref Stage
         USERS_TABLE: !Ref UsersTable
         CALENDARS_TABLE: !Ref CalendarsTable
+        GOOGLE_CLIENT_ID: !Ref GoogleClientId
+        GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
+        FRONTEND_URL: !Ref FrontendUrl
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
@@ -39,7 +57,7 @@ Resources:
   AuthFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
+      CodeUri: src
       Handler: handlers.auth.handler
       Events:
         GoogleAuth:
@@ -47,7 +65,7 @@ Resources:
           Properties:
             RestApiId: !Ref MeaningfulApi
             Path: /auth/google
-            Method: POST
+            Method: GET
         AuthCallback:
           Type: Api
           Properties:
@@ -61,7 +79,7 @@ Resources:
   CalendarFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
+      CodeUri: src
       Handler: handlers.calendar.handler
       Events:
         CalendarSync:
@@ -126,6 +144,12 @@ Outputs:
     Value: !Sub 'https://${MeaningfulApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/'
     Export:
       Name: !Sub 'meaningful-${Stage}-api-url'
+  
+  ApiUrl:
+    Description: 'API URL for OAuth redirects'
+    Value: !Sub 'https://${MeaningfulApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
+    Export:
+      Name: !Sub 'meaningful-${Stage}-api-base-url'
   
   UsersTableName:
     Description: 'DynamoDB Users table name'

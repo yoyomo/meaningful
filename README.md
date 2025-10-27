@@ -41,16 +41,22 @@ meaningful/
 
 ### Quick Start with Makefile
 ```bash
-# Initial setup (installs all dependencies)
+# 1. Initial setup (installs all dependencies)
 make setup
 
-# Start development (runs both frontend and backend)
+# 2. Set up Google OAuth (required for authentication)
+make google-setup  # Shows setup instructions
+
+# 3. Start development (runs both frontend and backend)  
 make dev
 
 # Or run individually
 make dev-frontend  # React app at http://localhost:3000
 make dev-backend   # API at http://localhost:3001
 ```
+
+### Google OAuth Required
+This app uses Google OAuth for authentication and calendar access. See [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) for detailed setup instructions.
 
 ### Manual Setup
 
@@ -85,8 +91,10 @@ Run `make help` to see all available commands:
 
 ## Development Status
 - ✅ Initial project setup
-- 🚧 Google authentication (next)
-- 🚧 Google Calendar sync (next)
+- ✅ Google OAuth authentication
+- ✅ Modern React UI with Tailwind
+- ✅ AWS SAM serverless backend
+- 🚧 Google Calendar integration (next)
 - ⏳ Call scheduling features
 - ⏳ Friend management
-- ⏳ UI/UX implementation
+- ⏳ AI call summaries
