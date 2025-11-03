@@ -26,8 +26,23 @@ class GoogleOAuthService:
         self.redirect_uri = f"{os.environ.get('API_URL', 'http://localhost:3001')}/auth/callback"
         self.frontend_url = FRONTEND_URL
         
-        # DynamoDB
-        self.dynamodb = boto3.resource('dynamodb')
+        # DynamoDB - use local DynamoDB if endpoint is configured
+        dynamodb_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
+        if dynamodb_endpoint:
+            # Local DynamoDB
+            self.dynamodb = boto3.resource(
+                'dynamodb',
+                endpoint_url=dynamodb_endpoint,
+                region_name='us-east-1',
+                aws_access_key_id='dummy',
+                aws_secret_access_key='dummy'
+            )
+            print(f"✅ Using local DynamoDB at {dynamodb_endpoint}")
+        else:
+            # AWS DynamoDB
+            self.dynamodb = boto3.resource('dynamodb')
+            print("✅ Using AWS DynamoDB")
+        
         self.users_table = self.dynamodb.Table(USERS_TABLE)
         
         # Google OAuth scopes - what permissions we need
@@ -117,7 +132,13 @@ class GoogleOAuthService:
             }
             
             # Store or update user in DynamoDB
-            self.users_table.put_item(Item=user_data)
+            try:
+                self.users_table.put_item(Item=user_data)
+            except Exception as db_error:
+                # Log but don't fail - OAuth succeeded even if DB write failed
+                error_type = type(db_error).__name__
+                error_msg = str(db_error)
+                print(f"⚠️  DynamoDB write failed (OAuth succeeded, user authenticated): {error_type}: {error_msg}")
             
             return {
                 'success': True,

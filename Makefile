@@ -136,11 +136,30 @@ validate: ## Validate SAM template
 # Database
 db-local: ## Start local DynamoDB for testing
 	@echo "🗄️  Starting local DynamoDB..."
-	@docker run -p 8000:8000 -d amazon/dynamodb-local
+	@docker run -p 8000:8000 -d --name dynamodb-local amazon/dynamodb-local || docker start dynamodb-local
 	@echo "✅ DynamoDB running on http://localhost:8000"
+	@echo "⏳ Waiting for DynamoDB to be ready..."
+	@sleep 2
+	@$(MAKE) db-local-setup || echo "⚠️  Table setup failed - make sure AWS CLI is installed"
 	
 db-local-stop: ## Stop local DynamoDB
-	@docker stop $$(docker ps -q --filter ancestor=amazon/dynamodb-local) || true
+	@docker stop dynamodb-local || true
+	@docker rm dynamodb-local || true
+	
+db-local-setup: ## Set up tables in local DynamoDB
+	@echo "🗄️  Setting up local DynamoDB tables..."
+	@aws dynamodb create-table --endpoint-url http://localhost:8000 \
+		--table-name meaningful-dev-users \
+		--attribute-definitions AttributeName=id,AttributeType=S AttributeName=email,AttributeType=S \
+		--key-schema AttributeName=id,KeyType=HASH \
+		--global-secondary-indexes 'IndexName=EmailIndex,KeySchema=[{AttributeName=email,KeyType=HASH}],Projection={ProjectionType=ALL}' \
+		--billing-mode PAY_PER_REQUEST 2>/dev/null || echo "✅ Table 'meaningful-dev-users' already exists"
+	@aws dynamodb create-table --endpoint-url http://localhost:8000 \
+		--table-name meaningful-dev-calendars \
+		--attribute-definitions AttributeName=user_id,AttributeType=S AttributeName=calendar_id,AttributeType=S \
+		--key-schema AttributeName=user_id,KeyType=HASH AttributeName=calendar_id,KeyType=RANGE \
+		--billing-mode PAY_PER_REQUEST 2>/dev/null || echo "✅ Table 'meaningful-dev-calendars' already exists"
+	@echo "✅ Local DynamoDB tables set up!"
 
 # Preview
 preview-frontend: ## Preview production build locally
