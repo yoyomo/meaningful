@@ -1,11 +1,26 @@
 import { useState, useEffect } from 'react'
 
+const STORAGE_KEY = 'meaningful_user'
+
 const App = () => {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem(STORAGE_KEY)
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch (e) {
+        // Invalid data, clear it
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    }
+  }, [])
 
   // Check for auth result in URL params (after Google redirect)
   useEffect(() => {
@@ -16,17 +31,27 @@ const App = () => {
     const error = urlParams.get('error')
 
     if (authResult === 'success' && userId) {
-      setUser({
+      const userData = {
         id: userId,
         name: decodeURIComponent(userName || ''),
-      })
+      }
+      setUser(userData)
+      // Save to localStorage for persistence
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(userData))
     } else if (error) {
       setError(`Authentication failed: ${error}`)
     }
-      // Clean up URL
-    window.history.replaceState({}, document.title, '/')
-
+    
+    // Clean up URL
+    if (authResult || error) {
+      window.history.replaceState({}, document.title, '/')
+    }
   }, [])
+
+  const handleSignOut = () => {
+    setUser(null)
+    localStorage.removeItem(STORAGE_KEY)
+  }
 
   const handleGoogleSignIn = async () => {
     try {
@@ -72,6 +97,12 @@ const App = () => {
             </button>
             <button className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium">
               Schedule Call
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="w-full px-4 py-2 text-gray-500 hover:text-gray-700 transition-colors text-sm"
+            >
+              Sign out
             </button>
           </div>
         </div>
