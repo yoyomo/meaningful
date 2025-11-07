@@ -11,8 +11,8 @@ setup: ## Initial project setup (install all dependencies)
 	@echo "🚀 Setting up Meaningful app..."
 	@echo "📦 Installing frontend dependencies..."
 	@cd frontend && pnpm install
-	@echo "🐍 Installing backend dependencies..."
-	@cd backend && pip install -r src/requirements.txt -r src/requirements-dev.txt
+	@echo "🐍 Installing backend dependencies with SAM..."
+	@cd backend && sam build
 	@echo "✅ Setup complete!"
 	@echo ""
 	@echo "📋 Next steps:"
@@ -33,7 +33,7 @@ dev-frontend: ## Start frontend development server
 
 dev-backend: ## Start backend API locally with SAM
 	@echo "🐍 Starting backend API locally..."
-	@cd backend && sam build --cached && sam local start-api --port 3001
+	@cd backend && sam build --cached && sam local start-api --port 3001 --env-vars locals.json
 
 # Build
 build: build-frontend build-backend ## Build both frontend and backend
@@ -47,27 +47,28 @@ build-backend: ## Build backend with SAM
 	@cd backend && sam build
 
 # Deployment
-deploy: ## Deploy backend to AWS
-	@echo "🚀 Deploying to AWS..."
+deploy: ## Deploy SAM application to AWS
+	@echo "☁️  Deploying SAM application to AWS..."
 	@cd backend && sam deploy
 
-deploy-guided: ## Deploy backend to AWS with guided setup
-	@echo "🚀 Deploying to AWS (guided)..."
+deploy-guided: ## Deploy SAM application with guided setup
+	@echo "☁️  Deploying SAM application (guided setup)..."
 	@cd backend && sam deploy --guided
 
 # Testing
 test: ## Run all tests
 	@echo "🧪 Running tests..."
 	@cd frontend && pnpm test --run
-	@cd backend && python -m pytest tests/ -v
+	@echo "☁️  For SAM tests, use: make test-sam"
 
 test-frontend: ## Run frontend tests
 	@echo "⚛️  Running frontend tests..."
 	@cd frontend && pnpm test --run
 
-test-backend: ## Run backend tests
-	@echo "🐍 Running backend tests..."
-	@cd backend && python -m pytest tests/ -v
+test-sam: ## Test SAM functions locally
+	@echo "☁️  Testing SAM functions locally..."
+	@cd backend && sam local invoke AuthFunction --event events/auth-event.json
+	@cd backend && sam local invoke CalendarFunction --event events/calendar-sync-event.json
 
 test-backend-local: ## Test backend functions locally
 	@echo "🧪 Testing backend functions locally..."
@@ -117,12 +118,13 @@ clean-all: ## Clean everything including node_modules
 check-deps: ## Check for dependency updates
 	@echo "🔍 Checking for dependency updates..."
 	@cd frontend && pnpm outdated
-	@cd backend && pip list --outdated
+	@echo "🐍 Check backend dependencies in src/requirements.txt manually"
 
 update-deps: ## Update dependencies
 	@echo "⬆️  Updating dependencies..."
 	@cd frontend && pnpm update
-	@cd backend && pip install -r src/requirements.txt --upgrade
+	@echo "🐍 Backend dependencies updated by rebuilding with SAM..."
+	@cd backend && sam build
 
 # AWS Utilities
 logs: ## View backend logs
@@ -136,30 +138,7 @@ validate: ## Validate SAM template
 # Database
 db-local: ## Start local DynamoDB for testing
 	@echo "🗄️  Starting local DynamoDB..."
-	@docker run -p 8000:8000 -d --name dynamodb-local amazon/dynamodb-local || docker start dynamodb-local
-	@echo "✅ DynamoDB running on http://localhost:8000"
-	@echo "⏳ Waiting for DynamoDB to be ready..."
-	@sleep 2
-	@$(MAKE) db-local-setup || echo "⚠️  Table setup failed - make sure AWS CLI is installed"
-	
-db-local-stop: ## Stop local DynamoDB
-	@docker stop dynamodb-local || true
-	@docker rm dynamodb-local || true
-	
-db-local-setup: ## Set up tables in local DynamoDB
-	@echo "🗄️  Setting up local DynamoDB tables..."
-	@aws dynamodb create-table --endpoint-url http://localhost:8000 \
-		--table-name meaningful-dev-users \
-		--attribute-definitions AttributeName=id,AttributeType=S AttributeName=email,AttributeType=S \
-		--key-schema AttributeName=id,KeyType=HASH \
-		--global-secondary-indexes 'IndexName=EmailIndex,KeySchema=[{AttributeName=email,KeyType=HASH}],Projection={ProjectionType=ALL}' \
-		--billing-mode PAY_PER_REQUEST 2>/dev/null || echo "✅ Table 'meaningful-dev-users' already exists"
-	@aws dynamodb create-table --endpoint-url http://localhost:8000 \
-		--table-name meaningful-dev-calendars \
-		--attribute-definitions AttributeName=user_id,AttributeType=S AttributeName=calendar_id,AttributeType=S \
-		--key-schema AttributeName=user_id,KeyType=HASH AttributeName=calendar_id,KeyType=RANGE \
-		--billing-mode PAY_PER_REQUEST 2>/dev/null || echo "✅ Table 'meaningful-dev-calendars' already exists"
-	@echo "✅ Local DynamoDB tables set up!"
+	@docker run -p 8000:8000 amazon/dynamodb-local
 
 # Preview
 preview-frontend: ## Preview production build locally
@@ -167,12 +146,12 @@ preview-frontend: ## Preview production build locally
 	@cd frontend && pnpm preview
 
 # Environment
-env-setup: ## Copy locals.json.example to locals.json and .env.dist files to .env for local development
+env-setup: ## Copy .env.dist files to .env for local development
 	@echo "📝 Setting up environment files..."
 	@cp frontend/.env.dist frontend/.env || echo "Frontend .env.dist not found"
-	@cp backend/locals.json.example backend/locals.json || echo "Backend locals.json.example not found"
+	@cp backend/src/.env.dist backend/src/.env || echo "Backend .env.dist not found"
 	@echo "✅ Environment files created"
-	@echo "📝 Edit frontend/.env and backend/locals.json with your values"
+	@echo "📝 Edit frontend/.env and backend/src/.env with your values"
 
 google-setup: ## Show Google OAuth setup instructions
 	@echo "🔑 Google OAuth Setup Required"
@@ -180,8 +159,7 @@ google-setup: ## Show Google OAuth setup instructions
 	@echo "1. Go to: https://console.cloud.google.com/"
 	@echo "2. Create project → Enable APIs (Calendar, People)"  
 	@echo "3. Create OAuth credentials"
-	@echo "4. Copy backend/locals.json.example to backend/locals.json"
-	@echo "5. Add your credentials to backend/locals.json"
+	@echo "4. Set environment variables"
 	@echo ""
 	@echo "📖 Full instructions: cat GOOGLE_OAUTH_SETUP.md"
 	@echo ""
