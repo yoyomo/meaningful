@@ -17,7 +17,7 @@ const App = () => {
   }
 
   if (user) {
-    return <SignedInView userName={user.name} onSignOut={signOut} />
+    return <SignedInView user={user} onSignOut={signOut} />
   }
 
   return <SignedOutView loading={isSigningIn} error={error} onSignIn={signIn} />

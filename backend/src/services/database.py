@@ -1,6 +1,10 @@
 import boto3
-from typing import Dict, Any, Optional
+from typing import Dict, Optional, Mapping
 import os
+from datetime import datetime
+from typing import cast
+
+from models.availability import Availability
 
 
 class DynamoDBService:
@@ -9,7 +13,7 @@ class DynamoDBService:
         self.users_table = self.dynamodb.Table(os.environ['USERS_TABLE'])
         self.calendars_table = self.dynamodb.Table(os.environ['CALENDARS_TABLE'])
     
-    def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user(self, user_id: str) -> Optional[Dict[str, object]]:
         """Get user by ID"""
         try:
             response = self.users_table.get_item(Key={'id': user_id})
@@ -18,16 +22,16 @@ class DynamoDBService:
             print(f"Error getting user: {e}")
             return None
     
-    def create_user(self, user_data: Dict[str, Any]) -> bool:
+    def create_user(self, user_data: Mapping[str, object]) -> bool:
         """Create a new user"""
         try:
-            self.users_table.put_item(Item=user_data)
+            self.users_table.put_item(Item=dict(user_data))
             return True
         except Exception as e:
             print(f"Error creating user: {e}")
             return False
     
-    def update_user(self, user_id: str, updates: Dict[str, Any]) -> bool:
+    def update_user(self, user_id: str, updates: Mapping[str, object]) -> bool:
         """Update user data"""
         try:
             # Build update expression
@@ -48,4 +52,30 @@ class DynamoDBService:
             return True
         except Exception as e:
             print(f"Error updating user: {e}")
+            return False
+
+    def get_user_availability(self, user_id: str) -> Optional[Availability]:
+        """Get a user's stored availability"""
+        user = self.get_user(user_id)
+        if not user:
+            return None
+        availability_raw = user.get('availability')
+        if isinstance(availability_raw, Mapping):
+            return Availability.from_record(cast(Mapping[str, object], availability_raw))
+        return None
+
+    def set_user_availability(self, user_id: str, availability: Availability) -> bool:
+        """Persist a user's availability data"""
+        try:
+            self.users_table.update_item(
+                Key={'id': user_id},
+                UpdateExpression="SET availability = :availability, updated_at = :updated_at",
+                ExpressionAttributeValues={
+                    ':availability': availability.to_dict(),
+                    ':updated_at': datetime.utcnow().isoformat(),
+                }
+            )
+            return True
+        except Exception as e:
+            print(f"Error updating user availability: {e}")
             return False

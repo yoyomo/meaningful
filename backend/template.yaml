@@ -100,6 +100,34 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref CalendarsTable
 
+  AvailabilityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src
+      Handler: handlers.availability.handler
+      Events:
+        GetAvailability:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/availability
+            Method: GET
+        UpdateAvailability:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/availability
+            Method: PUT
+        OptionsAvailability:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/availability
+            Method: OPTIONS
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+
   # DynamoDB Tables
   UsersTable:
     Type: AWS::DynamoDB::Table
