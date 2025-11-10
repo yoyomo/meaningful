@@ -28,6 +28,9 @@ if ! command -v aws >/dev/null 2>&1; then
   exit 1
 fi
 
+# Suppress AWS CLI output
+export AWS_PAGER=""
+
 if [ ! -f "${TEMPLATE_PATH}" ]; then
   echo "❌ Template file '${TEMPLATE_PATH}' not found." >&2
   exit 1
