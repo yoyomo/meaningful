@@ -33,15 +33,20 @@ pip install -r requirements.txt
 
 ### Local Development
 ```bash
-# Build the application
+# 1. Start DynamoDB Local (runs in its own terminal)
+make db-local
+
+# 2. Bootstrap tables defined in template.yaml (uses aws + yq)
+make bootstrap-db
+
+# 3. In a separate terminal build and start the API
 sam build
-
-# Start API locally
-sam local start-api
-
-# Test a specific function locally
-sam local invoke AuthFunction --event events/auth-event.json
+sam local start-api --port 3001 --env-vars locals.json
 ```
+
+> **Prerequisites:** The bootstrap step relies on the AWS CLI and [`yq`](https://mikefarah.gitbook.io/yq/).
+
+You can also run `make dev-backend` if you prefer the one-liner experience—the Makefile will not start DynamoDB for you, so ensure step 1 above is running first.
 
 ### Deploy to AWS
 ```bash

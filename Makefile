@@ -140,6 +140,10 @@ db-local: ## Start local DynamoDB for testing
 	@echo "🗄️  Starting local DynamoDB..."
 	@docker run -p 8000:8000 amazon/dynamodb-local
 
+bootstrap-db: ## Create/ensure DynamoDB tables defined in template.yaml exist locally
+	@echo "🛠️  Bootstrapping DynamoDB tables from template.yaml..."
+	@cd backend && DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT-http://localhost:8000} bash scripts/bootstrap_tables.sh template.yaml
+
 # Preview
 preview-frontend: ## Preview production build locally
 	@echo "👀 Previewing frontend build..."
