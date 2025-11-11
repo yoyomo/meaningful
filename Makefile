@@ -34,7 +34,7 @@ dev-frontend: ## Start frontend development server
 dev-backend: ## Start backend API locally with SAM (Docker Compose network)
 	@echo "🐍 Starting backend API locally..."
 	@$(MAKE) db-local
-	@cd backend && sam build --cached && sam local start-api --docker-network meaningful-dev --port 3001 --env-vars locals.json
+	@cd backend && sam build && sam local start-api --docker-network meaningful-dev --port 3001 --env-vars env.json
 
 # Build
 build: build-frontend build-backend ## Build both frontend and backend

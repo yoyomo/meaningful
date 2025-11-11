@@ -44,7 +44,7 @@ make dev-backend
 
 # 3b. Or run manually
 sam build
-sam local start-api --docker-network meaningful-dev --port 3001 --env-vars locals.json
+sam local start-api --docker-network meaningful-dev --port 3001 --env-vars env.json
 ```
 
 > **Prerequisites:** The bootstrap step relies on the AWS CLI and [`yq`](https://mikefarah.gitbook.io/yq/).

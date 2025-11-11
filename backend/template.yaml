@@ -9,6 +9,11 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Description: Deployment stage
   
+  DynamoDbEndpoint:
+    Type: String
+    Default: ''
+    Description: Optional override for DynamoDB endpoint (used for local development)
+  
   GoogleClientId:
     Type: String
     Description: Google OAuth Client ID
@@ -36,6 +41,7 @@ Globals:
         GOOGLE_CLIENT_ID: !Ref GoogleClientId
         GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
         FRONTEND_URL: !Ref FrontendUrl
+        DYNAMODB_ENDPOINT: !Ref DynamoDbEndpoint
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"

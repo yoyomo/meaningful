@@ -16,14 +16,14 @@ GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 USERS_TABLE = os.environ.get('USERS_TABLE')
-
+# API_URL is dynamically determined from SAM template or defaults to localhost
+API_URL = os.environ.get('API_URL', 'http://localhost:3001')
 
 class GoogleOAuthService:
     def __init__(self):
         self.client_id = GOOGLE_CLIENT_ID
         self.client_secret = GOOGLE_CLIENT_SECRET
-        # API_URL is dynamically determined from SAM template or defaults to localhost
-        self.redirect_uri = f"{os.environ.get('API_URL', 'http://localhost:3001')}/auth/callback"
+        self.redirect_uri = f"{API_URL}/auth/callback"
         self.frontend_url = FRONTEND_URL
         
         # DynamoDB - use local DynamoDB if endpoint is configured
@@ -33,9 +33,9 @@ class GoogleOAuthService:
             self.dynamodb = boto3.resource(
                 'dynamodb',
                 endpoint_url=dynamodb_endpoint,
-                region_name='us-east-1',
-                aws_access_key_id='dummy',
-                aws_secret_access_key='dummy'
+                region_name=os.environ.get('AWS_REGION', 'us-east-1'),
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'dummy'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'dummy'),
             )
             print(f"✅ Using local DynamoDB at {dynamodb_endpoint}")
         else:
