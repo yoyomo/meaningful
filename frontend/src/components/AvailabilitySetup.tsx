@@ -19,11 +19,12 @@ const HUMAN_READABLE_DAYS: Array<{ key: DayKey; label: string; short: string }> 
 type AvailabilitySetupProps = {
   user: AuthUser
   onSignOut: () => void
+  onBack?: () => void
 }
 
 const EMPTY_SLOT: TimeRange = { start: '', end: '' }
 
-const AvailabilitySetup = ({ user, onSignOut }: AvailabilitySetupProps) => {
+const AvailabilitySetup = ({ user, onSignOut, onBack }: AvailabilitySetupProps) => {
   const {
     data: availability,
     isLoading,
@@ -195,12 +196,22 @@ const AvailabilitySetup = ({ user, onSignOut }: AvailabilitySetupProps) => {
             <p className="text-sm text-slate-500">Hi {user.name}, let’s get your schedule ready.</p>
           </div>
         </div>
-        <button
-          onClick={onSignOut}
-          className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 focus:outline-none"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 focus:outline-none"
+            >
+              ← Back to home
+            </button>
+          )}
+          <button
+            onClick={onSignOut}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 focus:outline-none"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-10">
