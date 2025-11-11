@@ -5,17 +5,17 @@ GRAY = "\033[90m"
 GREEN = "\033[32m"
 RESET = "\033[0m"
 
-def log_error(message: str):
-    print(f"{RED}{message}:{RESET}")
+def log_error(colored_message: str, message: str = ""):
+    print(f"{RED}{colored_message}:{RESET} {message}")
 
-def log_warning(message: str):
-    print(f"{YELLOW}{message}:{RESET}")
+def log_warning(colored_message: str, message: str = ""):
+    print(f"{YELLOW}{colored_message}:{RESET} {message}")
 
-def log_info(message: str):
-    print(f"{BLUE}{message}:{RESET}")
+def log_info(colored_message: str, message: str = ""):
+    print(f"{BLUE}{colored_message}:{RESET} {message}")
 
-def log_debug(message: str):
-    print(f"{GRAY}{message}:{RESET}")
+def log_debug(colored_message: str, message: str = ""):
+    print(f"{GRAY}{colored_message}:{RESET} {message}")
 
-def log_success(message: str):
-    print(f"{GREEN}{message}:{RESET}")
+def log_success(colored_message: str, message: str = ""):
+    print(f"{GREEN}{colored_message}:{RESET} {message}")
