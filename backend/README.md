@@ -33,20 +33,21 @@ pip install -r requirements.txt
 
 ### Local Development
 ```bash
-# 1. Start DynamoDB Local (runs in its own terminal)
+# 1. Start DynamoDB Local (Docker Compose, persists under backend/docker/dynamodb/)
 make db-local
 
-# 2. Bootstrap tables defined in template.yaml (uses aws + yq)
+# 2. Bootstrap tables defined in template.yaml (uses aws + yq against localhost:8000)
 make bootstrap-db
 
-# 3. In a separate terminal build and start the API
+# 3a. One-liner backend loop (starts SAM on the same Docker network)
+make dev-backend
+
+# 3b. Or run manually
 sam build
-sam local start-api --port 3001 --env-vars locals.json
+sam local start-api --docker-network meaningful-dev --port 3001 --env-vars locals.json
 ```
 
 > **Prerequisites:** The bootstrap step relies on the AWS CLI and [`yq`](https://mikefarah.gitbook.io/yq/).
-
-You can also run `make dev-backend` if you prefer the one-liner experience—the Makefile will not start DynamoDB for you, so ensure step 1 above is running first.
 
 ### Deploy to AWS
 ```bash

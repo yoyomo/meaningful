@@ -7,9 +7,22 @@ from typing import cast
 from models.availability import Availability
 
 
+def _create_dynamodb_resource() -> boto3.resources.base.ServiceResource:
+    endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
+    if endpoint_url:
+        return boto3.resource(
+            'dynamodb',
+            endpoint_url=endpoint_url,
+            region_name=os.environ.get('AWS_REGION', 'us-east-1'),
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'dummy'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'dummy'),
+        )
+    return boto3.resource('dynamodb')
+
+
 class DynamoDBService:
     def __init__(self):
-        self.dynamodb = boto3.resource('dynamodb')
+        self.dynamodb = _create_dynamodb_resource()
         self.users_table = self.dynamodb.Table(os.environ['USERS_TABLE'])
         self.calendars_table = self.dynamodb.Table(os.environ['CALENDARS_TABLE'])
     

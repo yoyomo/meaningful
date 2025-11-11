@@ -7,6 +7,6 @@
     "Environment": {
         "USERS_TABLE": "meaningful-dev-users",
         "CALENDARS_TABLE": "meaningful-dev-calendars",
-        "DYNAMODB_ENDPOINT": "http://localhost:8000"
+        "DYNAMODB_ENDPOINT": "http://dynamodb:8000"
     }
 }

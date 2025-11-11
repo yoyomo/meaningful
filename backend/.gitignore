@@ -65,3 +65,5 @@ Thumbs.db
 
 # CDK
 cdk.out/
+
+docker/

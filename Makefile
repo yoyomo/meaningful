@@ -31,9 +31,10 @@ dev-frontend: ## Start frontend development server
 	@echo "⚛️  Starting frontend dev server..."
 	@cd frontend && pnpm dev
 
-dev-backend: ## Start backend API locally with SAM
+dev-backend: ## Start backend API locally with SAM (Docker Compose network)
 	@echo "🐍 Starting backend API locally..."
-	@cd backend && sam build --cached && sam local start-api --port 3001 --env-vars locals.json
+	@$(MAKE) db-local
+	@cd backend && sam build --cached && sam local start-api --docker-network meaningful-dev --port 3001 --env-vars locals.json
 
 # Build
 build: build-frontend build-backend ## Build both frontend and backend
@@ -136,12 +137,18 @@ validate: ## Validate SAM template
 	@cd backend && sam validate
 
 # Database
-db-local: ## Start local DynamoDB for testing
-	@echo "🗄️  Starting local DynamoDB..."
-	@docker run -p 8000:8000 amazon/dynamodb-local
+db-local: ## Start local DynamoDB via Docker Compose
+	@echo "🗄️  Starting local DynamoDB (docker compose)..."
+	@mkdir -p backend/docker/dynamodb
+	@cd backend && docker compose up -d dynamodb
+
+db-local-stop: ## Stop the local DynamoDB container
+	@echo "🛑 Stopping local DynamoDB..."
+	@cd backend && docker compose stop dynamodb >/dev/null || true
 
 bootstrap-db: ## Create/ensure DynamoDB tables defined in template.yaml exist locally
 	@echo "🛠️  Bootstrapping DynamoDB tables from template.yaml..."
+	@$(MAKE) db-local
 	@cd backend && DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT-http://localhost:8000} bash scripts/bootstrap_tables.sh template.yaml
 
 # Preview
