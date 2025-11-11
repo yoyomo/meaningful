@@ -1,12 +1,11 @@
 import os
-import json
 from typing import Dict, Any, Optional
+from utils.logs import log_error, log_success
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 import boto3
 from datetime import datetime
-import uuid
 import requests as http_requests
 from utils.env import *  # Load environment variables
 
@@ -37,11 +36,11 @@ class GoogleOAuthService:
                 aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'dummy'),
                 aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'dummy'),
             )
-            print(f"✅ Using local DynamoDB at {dynamodb_endpoint}")
+            log_success(f"Using local DynamoDB at {dynamodb_endpoint}")
         else:
             # AWS DynamoDB
             self.dynamodb = boto3.resource('dynamodb')
-            print("✅ Using AWS DynamoDB")
+            log_success("Using AWS DynamoDB")
         
         self.users_table = self.dynamodb.Table(USERS_TABLE)
         
@@ -138,7 +137,7 @@ class GoogleOAuthService:
                 # Log but don't fail - OAuth succeeded even if DB write failed
                 error_type = type(db_error).__name__
                 error_msg = str(db_error)
-                print(f"⚠️  DynamoDB write failed (OAuth succeeded, user authenticated): {error_type}: {error_msg}")
+                log_error(f"DynamoDB write failed (OAuth succeeded, user authenticated): {error_type}: {error_msg}")
             
             return {
                 'success': True,
@@ -152,7 +151,7 @@ class GoogleOAuthService:
             }
             
         except Exception as e:
-            print(f"OAuth callback error: {e}")
+            log_error(f"OAuth callback error: {e}")
             return {
                 'success': False,
                 'error': str(e)
@@ -179,7 +178,7 @@ class GoogleOAuthService:
             return None
             
         except Exception as e:
-            print(f"Error fetching phone number: {e}")
+            log_error(f"Error fetching phone number: {e}")
             return None
     
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -190,5 +189,5 @@ class GoogleOAuthService:
             response = self.users_table.get_item(Key={'id': user_id})
             return response.get('Item')
         except Exception as e:
-            print(f"Error getting user: {e}")
+            log_error(f"Error getting user: {e}")
             return None
