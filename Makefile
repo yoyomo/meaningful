@@ -160,9 +160,9 @@ preview-frontend: ## Preview production build locally
 env-setup: ## Copy .env.dist files to .env for local development
 	@echo "📝 Setting up environment files..."
 	@cp frontend/.env.dist frontend/.env || echo "Frontend .env.dist not found"
-	@cp backend/src/.env.dist backend/src/.env || echo "Backend .env.dist not found"
+	@cp backend/env.example.json backend/env.json || echo "Backend env.example.json not found"
 	@echo "✅ Environment files created"
-	@echo "📝 Edit frontend/.env and backend/src/.env with your values"
+	@echo "📝 Edit frontend/.env and backend/env.json with your values"
 
 google-setup: ## Show Google OAuth setup instructions
 	@echo "🔑 Google OAuth Setup Required"
