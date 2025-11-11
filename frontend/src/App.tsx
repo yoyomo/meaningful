@@ -1,9 +1,26 @@
+import { useMemo } from 'react'
 import SignedInView from './components/SignedInView'
 import SignedOutView from './components/SignedOutView'
 import { useAuth } from './hooks/useAuth'
 
+const decodeParam = (value: string | null) => {
+  if (!value) {
+    return null
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 const App = () => {
   const { user, isUserLoading, error, signIn, isSigningIn, signOut } = useAuth()
+  const invitation = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return {
+      inviterName: decodeParam(params.get('from')),
+      inviteeName: decodeParam(params.get('to')),
+    }
+  }, [])
 
   if (isUserLoading) {
     return (
@@ -17,10 +34,17 @@ const App = () => {
   }
 
   if (user) {
-    return <SignedInView user={user} onSignOut={signOut} />
+    return <SignedInView user={user} onSignOut={signOut} invitation={invitation} />
   }
 
-  return <SignedOutView loading={isSigningIn} error={error} onSignIn={signIn} />
+  return (
+    <SignedOutView
+      loading={isSigningIn}
+      error={error}
+      onSignIn={signIn}
+      invitation={invitation}
+    />
+  )
 }
 
 export default App
