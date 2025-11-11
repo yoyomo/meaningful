@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_URL, AUTH_TTL_MS, STORAGE_KEY } from '../constants'
 
@@ -11,34 +11,41 @@ type GoogleAuthResponse = {
   auth_url?: string
 }
 
+const readPersistedUser = (): AuthUser | null => {
+  const savedUser = localStorage.getItem(STORAGE_KEY)
+  if (!savedUser) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(savedUser) as { user: AuthUser; expiresAt: number }
+
+    if (Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(STORAGE_KEY)
+      return null
+    }
+
+    return parsed.user
+  } catch (err) {
+    localStorage.removeItem(STORAGE_KEY)
+    return null
+  }
+}
+
 export const useAuth = () => {
   const [error, setError] = useState('')
   const queryClient = useQueryClient()
+
+  const persistedUser = useMemo(() => readPersistedUser(), [])
 
   const userQuery = useQuery<AuthUser | null>({
     queryKey: ['user'],
     staleTime: AUTH_TTL_MS,
     gcTime: AUTH_TTL_MS,
-    queryFn: async () => {
-      const savedUser = localStorage.getItem(STORAGE_KEY)
-      if (!savedUser) {
-        return null
-      }
-
-      try {
-        const parsed = JSON.parse(savedUser) as { user: AuthUser; expiresAt: number }
-
-        if (Date.now() > parsed.expiresAt) {
-          localStorage.removeItem(STORAGE_KEY)
-          return null
-        }
-
-        return parsed.user
-      } catch (err) {
-        localStorage.removeItem(STORAGE_KEY)
-        return null
-      }
-    },
+    initialData: persistedUser,
+    initialDataUpdatedAt: persistedUser ? Date.now() : undefined,
+    refetchOnWindowFocus: false,
+    queryFn: () => readPersistedUser(),
   })
 
   useEffect(() => {
@@ -57,9 +64,10 @@ export const useAuth = () => {
       queryClient.setQueryData(['user'], userData)
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ user: userData, expiresAt: Date.now() + AUTH_TTL_MS })
+        JSON.stringify({ user: userData, expiresAt: Date.now() + AUTH_TTL_MS }),
       )
       setError('')
+      void queryClient.invalidateQueries({ queryKey: ['user'] })
     } else if (authError) {
       setError(`Authentication failed: ${authError}`)
     }

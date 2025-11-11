@@ -1,10 +1,21 @@
+type InvitationDetails = {
+  inviterName: string | null
+  inviteeName: string | null
+}
+
 type SignedOutViewProps = {
   loading: boolean
   error: string
   onSignIn: () => void
+  invitation: InvitationDetails
 }
 
-const SignedOutView = ({ loading, error, onSignIn }: SignedOutViewProps) => {
+const SignedOutView = ({ loading, error, onSignIn, invitation }: SignedOutViewProps) => {
+  const headline = invitation.inviteeName ? `Hi ${invitation.inviteeName}!` : 'Welcome to Meaningful'
+  const inviterMessage = invitation.inviterName
+    ? `${invitation.inviterName} is inviting you to catch up.`
+    : 'Meaningful helps friends find the perfect time to connect—no back-and-forth required.'
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full">
@@ -16,11 +27,8 @@ const SignedOutView = ({ loading, error, onSignIn }: SignedOutViewProps) => {
         </div>
 
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-3">Hi Sam!</h2>
-          <p className="text-gray-600 leading-relaxed">
-            Courtney's hoping to hop on a call with you. Sign up with Google to sync your
-            calendar—Meaningful will help find the best time and drop it right in.
-          </p>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-3">{headline}</h2>
+          <p className="text-gray-600 leading-relaxed">{inviterMessage}</p>
         </div>
 
         {error && (
@@ -56,7 +64,7 @@ const SignedOutView = ({ loading, error, onSignIn }: SignedOutViewProps) => {
               />
             </svg>
           )}
-          <span>{loading ? 'Signing in...' : 'Sign up with Google'}</span>
+          <span>{loading ? 'Signing in...' : 'Continue with Google'}</span>
         </button>
       </div>
     </div>
