@@ -187,10 +187,8 @@ const AvailabilitySetup = ({ user, onSignOut, onBack }: AvailabilitySetupProps) 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600">
-            <img src="/logo.svg" alt="Meaningful" className="h-8 w-8" />
-          </div>
+        <div className="flex items-center gap-6">
+          <img src="/logo.svg" alt="Meaningful" className="h-12 w-auto" />
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Set your availability</h1>
             <p className="text-sm text-slate-500">Hi {user.name}, let’s get your schedule ready.</p>

@@ -20,9 +20,7 @@ const SignedOutView = ({ loading, error, onSignIn, invitation }: SignedOutViewPr
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <img src="/logo.svg" alt="Meaningful" className="w-10 h-10" />
-          </div>
+          <img src="/logo.svg" alt="Meaningful" className="h-12 w-auto mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Meaningful</h1>
         </div>
 

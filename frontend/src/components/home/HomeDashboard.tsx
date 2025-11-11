@@ -55,10 +55,8 @@ const HomeDashboard = ({
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600">
-            <img src="/logo.svg" alt="Meaningful" className="h-7 w-7" />
-          </div>
+        <div className="flex items-center gap-4">
+          <img src="/logo.svg" alt="Meaningful" className="h-10 w-auto" />
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Meaningful</p>
             <h1 className="text-xl font-semibold text-slate-900">Your catch-up hub</h1>
