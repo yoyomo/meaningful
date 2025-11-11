@@ -179,7 +179,9 @@ google-setup: ## Show Google OAuth setup instructions
 # Status
 status: ## Show development status
 	@echo "📊 Development Status:"
-	@echo "Frontend: $(shell cd frontend && pnpm --version 2>/dev/null && echo "Ready" || echo "Not installed")"
-	@echo "Backend: $(shell cd backend && python --version 2>/dev/null && echo "Ready" || echo "Not installed")"
-	@echo "SAM CLI: $(shell sam --version 2>/dev/null && echo "Ready" || echo "Not installed")"
-	@echo "AWS CLI: $(shell aws --version 2>/dev/null && echo "Ready" || echo "Not installed")"
+	@echo "Frontend:"
+	@echo "pnpm: $(shell pnpm --version 2>/dev/null && echo "Ready" || echo "Not installed")"
+	@echo "Backend:"
+	@echo "docker compose: $(shell docker compose version 2>/dev/null && echo "Ready" || echo "Not installed")"
+	@echo "sam: $(shell sam --version 2>/dev/null && echo "Ready" || echo "Not installed")"
+	@echo "aws: $(shell aws --version 2>/dev/null && echo "Ready" || echo "Not installed")"
