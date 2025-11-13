@@ -70,6 +70,12 @@ class FriendsService:
         self._put_friend_item(friend_item)
         return friend_item
 
+    def remove_friend(self, user_id: str, friend_id: str) -> None:
+        self.friends_table.delete_item(
+            Key={"user_id": user_id, "friend_id": friend_id},
+            ConditionExpression="attribute_exists(friend_id)",
+        )
+
     def _get_contact(self, user_id: str, contact_id: str) -> Optional[Dict[str, Any]]:
         response = self.contacts_table.get_item(Key={"user_id": user_id, "contact_id": contact_id})
         return response.get("Item")

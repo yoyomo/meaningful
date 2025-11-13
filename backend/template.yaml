@@ -218,11 +218,35 @@ Resources:
             RestApiId: !Ref MeaningfulApi
             Path: /users/{user_id}/friends
             Method: POST
+        AvailableNow:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/available-now
+            Method: GET
+        RemoveFriend:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/{friend_id}
+            Method: DELETE
         OptionsFriends:
           Type: Api
           Properties:
             RestApiId: !Ref MeaningfulApi
             Path: /users/{user_id}/friends
+            Method: OPTIONS
+        OptionsFriendDetail:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/{friend_id}
+            Method: OPTIONS
+        OptionsFriendsAvailableNow:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/available-now
             Method: OPTIONS
       Policies:
         - DynamoDBCrudPolicy:
