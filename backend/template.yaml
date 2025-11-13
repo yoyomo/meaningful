@@ -38,6 +38,7 @@ Globals:
         STAGE: !Ref Stage
         USERS_TABLE: !Ref UsersTable
         CALENDARS_TABLE: !Ref CalendarsTable
+        CONTACTS_TABLE: !Ref ContactsTable
         GOOGLE_CLIENT_ID: !Ref GoogleClientId
         GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
         FRONTEND_URL: !Ref FrontendUrl
@@ -134,6 +135,42 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
 
+  ContactsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src
+      Handler: handlers.contacts.handler
+      Events:
+        ImportContacts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/contacts/import
+            Method: POST
+        SearchContacts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/contacts
+            Method: GET
+        OptionsContacts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/contacts
+            Method: OPTIONS
+        OptionsContactsImport:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/contacts/import
+            Method: OPTIONS
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContactsTable
+
   # DynamoDB Tables
   UsersTable:
     Type: AWS::DynamoDB::Table
@@ -172,6 +209,22 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
+  ContactsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'meaningful-${Stage}-contacts'
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: contact_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: contact_id
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
 Outputs:
   ApiEndpoint:
     Description: 'API Gateway endpoint URL'
@@ -196,3 +249,9 @@ Outputs:
     Value: !Ref CalendarsTable
     Export:
       Name: !Sub 'meaningful-${Stage}-calendars-table'
+
+  ContactsTableName:
+    Description: 'DynamoDB Contacts table name'
+    Value: !Ref ContactsTable
+    Export:
+      Name: !Sub 'meaningful-${Stage}-contacts-table'

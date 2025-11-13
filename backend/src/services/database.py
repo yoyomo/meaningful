@@ -7,7 +7,7 @@ from typing import cast
 from models.availability import Availability
 
 
-def _create_dynamodb_resource() -> boto3.resources.base.ServiceResource:
+def create_dynamodb_resource() -> boto3.resources.base.ServiceResource:
     endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     if endpoint_url:
         return boto3.resource(
@@ -22,7 +22,7 @@ def _create_dynamodb_resource() -> boto3.resources.base.ServiceResource:
 
 class DynamoDBService:
     def __init__(self):
-        self.dynamodb = _create_dynamodb_resource()
+        self.dynamodb = create_dynamodb_resource()
         self.users_table = self.dynamodb.Table(os.environ['USERS_TABLE'])
         self.calendars_table = self.dynamodb.Table(os.environ['CALENDARS_TABLE'])
     
