@@ -1,4 +1,6 @@
+import { useMemo, useState } from 'react'
 import type { AuthUser } from '../../hooks/useAuth'
+import { useContactsSearch, useImportContacts } from '../../hooks/useContacts'
 import type { Availability } from '../../shared/availability'
 
 type InvitationDetails = {
@@ -51,6 +53,16 @@ const HomeDashboard = ({
 
   const availabilitySlotCount = countAvailabilitySlots(availability)
   const hasAvailabilitySaved = availabilitySlotCount > 0 || Boolean(availability.updatedAt)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [importFeedback, setImportFeedback] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const trimmedSearch = useMemo(() => searchTerm.trim(), [searchTerm])
+
+  const contactsSearch = useContactsSearch(user.id, trimmedSearch)
+  const { mutateAsync: importContacts, isPending: isImporting } = useImportContacts(user.id)
+
+  const searchResults = contactsSearch.data ?? { contacts: [], appUsers: [] }
+  const hasSearch = trimmedSearch.length > 0
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -134,6 +146,144 @@ const HomeDashboard = ({
               </ul>
             </div>
           </article>
+        </section>
+
+        <section className="rounded-3xl border border-slate-100 bg-white px-8 py-10 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-blue-600">Friends</p>
+              <h3 className="mt-2 text-2xl font-semibold text-slate-900">Find people to connect with</h3>
+              <p className="mt-2 max-w-xl text-sm text-slate-600">
+                Import your Google contacts or search for friends already using Meaningful. We’ll keep this list private
+                until you invite someone.
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={async () => {
+                  setImportFeedback(null)
+                  setImportError(null)
+                  try {
+                    const result = await importContacts()
+                    setImportFeedback(
+                      result.imported > 0
+                        ? `Imported ${result.imported} contact${result.imported === 1 ? '' : 's'} from Google.`
+                        : 'No new contacts found to import.',
+                    )
+                  } catch (error) {
+                    setImportError(error instanceof Error ? error.message : 'Failed to import contacts')
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={isImporting}
+              >
+                {isImporting ? 'Importing…' : 'Import from Google'}
+              </button>
+              {importFeedback && <p className="text-xs text-green-600">{importFeedback}</p>}
+              {importError && <p className="text-xs text-red-600">{importError}</p>}
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <label className="text-sm font-medium text-slate-700" htmlFor="contact-search">
+              Search by name, email, or phone
+            </label>
+            <input
+              id="contact-search"
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Start typing to find friends…"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+
+          <div className="mt-6">
+            {!hasSearch && (
+              <p className="text-sm text-slate-500">
+                Import your contacts to build a list of friends, or search for someone you already know on Meaningful.
+              </p>
+            )}
+
+            {hasSearch && contactsSearch.isFetching && (
+              <p className="text-sm text-slate-500">Searching your contacts…</p>
+            )}
+
+            {hasSearch && contactsSearch.isError && (
+              <p className="text-sm text-red-600">
+                {contactsSearch.error?.message ?? 'We ran into an issue searching your contacts.'}
+              </p>
+            )}
+
+            {hasSearch && !contactsSearch.isFetching && !contactsSearch.isError && (
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Google contacts ({searchResults.contacts.length})
+                  </h4>
+                  <ul className="mt-3 space-y-3">
+                    {searchResults.contacts.length === 0 && (
+                      <li className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        No contacts matched that search yet. Try importing or adjusting your search.
+                      </li>
+                    )}
+                    {searchResults.contacts.map((contact) => {
+                      const primaryLabel =
+                        contact.names[0] || contact.emails[0] || contact.phones[0] || 'Unnamed contact'
+                      return (
+                        <li
+                          key={contact.contactId}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"
+                        >
+                          <p className="font-semibold text-slate-900">{primaryLabel}</p>
+                          <ul className="mt-1 space-y-1 text-xs text-slate-500">
+                            {contact.emails.map((email) => (
+                              <li key={`${contact.contactId}-email-${email}`}>{email}</li>
+                            ))}
+                            {contact.phones.map((phone) => (
+                              <li key={`${contact.contactId}-phone-${phone}`}>{phone}</li>
+                            ))}
+                          </ul>
+                          <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">
+                            Imported from Google contacts
+                          </p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Meaningful directory ({searchResults.appUsers.length})
+                  </h4>
+                  <ul className="mt-3 space-y-3">
+                    {searchResults.appUsers.length === 0 && (
+                      <li className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        No Meaningful users match that search just yet.
+                      </li>
+                    )}
+                    {searchResults.appUsers.map((appUser) => (
+                      <li
+                        key={appUser.userId}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"
+                      >
+                        <p className="font-semibold text-slate-900">{appUser.name ?? 'Meaningful member'}</p>
+                        <ul className="mt-1 space-y-1 text-xs text-slate-500">
+                          {appUser.username && <li>@{appUser.username}</li>}
+                          {appUser.email && <li>{appUser.email}</li>}
+                          {appUser.phoneNumber && <li>{appUser.phoneNumber}</li>}
+                        </ul>
+                        <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">
+                          Found in Meaningful directory
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
       </main>
     </div>
