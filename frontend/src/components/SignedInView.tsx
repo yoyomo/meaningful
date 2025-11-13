@@ -20,9 +20,11 @@ const computeHasSavedAvailability = (weeklySlots: Availability['weekly']) => {
   return Object.values(weeklySlots).some((slots) => slots.length > 0)
 }
 
+type PageState = 'home' | 'availability' | 'loading'
+
 const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
   const availabilityState = useAvailability(user.id)
-  const [activePage, setActivePage] = useState<'home' | 'availability'>('home')
+  const [activePage, setActivePage] = useState<PageState>('loading')
 
   const hasSavedAvailability = useMemo(() => {
     if (!availabilityState.data) {
@@ -37,16 +39,28 @@ const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
   }, [availabilityState.data])
 
   useEffect(() => {
-    if (!availabilityState.isLoading && !hasSavedAvailability) {
+    if (availabilityState.isLoading || availabilityState.isRefetching) {
+      setActivePage('loading')
+      return
+    }
+
+    if (hasSavedAvailability) {
+      setActivePage('home')
+    } else {
       setActivePage('availability')
     }
-  }, [availabilityState.isLoading, hasSavedAvailability])
+  }, [availabilityState.isLoading, availabilityState.isRefetching, hasSavedAvailability])
 
-  useEffect(() => {
-    if (hasSavedAvailability) {
-      setActivePage((current) => (current === 'availability' ? 'home' : current))
-    }
-  }, [hasSavedAvailability])
+  if (activePage === 'loading') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-600">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+          Loading your workspace…
+        </div>
+      </div>
+    )
+  }
 
   if (activePage === 'availability') {
     return (

@@ -11,6 +11,23 @@ type GoogleAuthResponse = {
   auth_url?: string
 }
 
+type AuthUrlState =
+  | {
+      authResult: 'success'
+      user: AuthUser
+      error: null
+    }
+  | {
+      authResult: 'error'
+      user: null
+      error: string
+    }
+  | {
+      authResult: null
+      user: null
+      error: null
+    }
+
 const readPersistedUser = (): AuthUser | null => {
   const savedUser = localStorage.getItem(STORAGE_KEY)
   if (!savedUser) {
@@ -32,35 +49,66 @@ const readPersistedUser = (): AuthUser | null => {
   }
 }
 
+const readAuthStateFromUrl = (): AuthUrlState => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const authResult = urlParams.get('auth')
+  const userId = urlParams.get('user_id')
+  const userName = urlParams.get('name')
+  const authError = urlParams.get('error')
+
+  if (authResult === 'success' && userId) {
+    return {
+      authResult: 'success',
+      user: {
+        id: userId,
+        name: decodeURIComponent(userName || ''),
+      },
+      error: null,
+    }
+  }
+
+  if (authError) {
+    return {
+      authResult: 'error',
+      user: null,
+      error: authError,
+    }
+  }
+
+  return {
+    authResult: null,
+    user: null,
+    error: null,
+  }
+}
+
 export const useAuth = () => {
   const [error, setError] = useState('')
   const queryClient = useQueryClient()
 
   const persistedUser = useMemo(() => readPersistedUser(), [])
+  const authUrlState = useMemo(() => readAuthStateFromUrl(), [])
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(authUrlState.user ?? persistedUser)
+  const [isInitializing, setIsInitializing] = useState(authUrlState.authResult === 'success')
 
   const userQuery = useQuery<AuthUser | null>({
     queryKey: ['user'],
+    enabled: !isInitializing,
     staleTime: AUTH_TTL_MS,
     gcTime: AUTH_TTL_MS,
     initialData: persistedUser,
     initialDataUpdatedAt: persistedUser ? Date.now() : undefined,
     refetchOnWindowFocus: false,
     queryFn: () => readPersistedUser(),
+    onSuccess: (data) => {
+      setCurrentUser(data)
+    },
   })
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const authResult = urlParams.get('auth')
-    const userId = urlParams.get('user_id')
-    const userName = urlParams.get('name')
-    const authError = urlParams.get('error')
-
-    if (authResult === 'success' && userId) {
-      const userData: AuthUser = {
-        id: userId,
-        name: decodeURIComponent(userName || ''),
-      }
-
+    if (authUrlState.authResult === 'success' && authUrlState.user) {
+      const userData = authUrlState.user
+      setCurrentUser(userData)
       queryClient.setQueryData(['user'], userData)
       localStorage.setItem(
         STORAGE_KEY,
@@ -68,14 +116,19 @@ export const useAuth = () => {
       )
       setError('')
       void queryClient.invalidateQueries({ queryKey: ['user'] })
-    } else if (authError) {
-      setError(`Authentication failed: ${authError}`)
+      setIsInitializing(false)
+    } else if (authUrlState.authResult === 'error' && authUrlState.error) {
+      setError(`Authentication failed: ${authUrlState.error}`)
+      setIsInitializing(false)
+    } else if (!isInitializing) {
+      // No auth params present; ensure initialization flag cleared
+      setIsInitializing(false)
     }
 
-    if (authResult || authError) {
+    if (authUrlState.authResult || authUrlState.error) {
       window.history.replaceState({}, document.title, '/')
     }
-  }, [queryClient])
+  }, [authUrlState, isInitializing, queryClient])
 
   const {
     mutate: signIn,
@@ -109,12 +162,13 @@ export const useAuth = () => {
   const handleSignOut = () => {
     queryClient.setQueryData(['user'], null)
     localStorage.removeItem(STORAGE_KEY)
+    setCurrentUser(null)
     setError('')
   }
 
   return {
-    user: userQuery.data,
-    isUserLoading: userQuery.isLoading,
+    user: currentUser,
+    isUserLoading: isInitializing || userQuery.isLoading,
     signIn,
     isSigningIn,
     error,
