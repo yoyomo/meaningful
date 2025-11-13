@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { AuthUser } from '../../hooks/useAuth'
 import { useContactsSearch, useImportContacts } from '../../hooks/useContacts'
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile'
+import { useAddFriend, useFriends } from '../../hooks/useFriends'
 import type { Availability } from '../../shared/availability'
 
 type InvitationDetails = {
@@ -60,18 +61,33 @@ const HomeDashboard = ({
   const [phoneDraft, setPhoneDraft] = useState('')
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [friendFeedback, setFriendFeedback] = useState<string | null>(null)
+  const [friendError, setFriendError] = useState<string | null>(null)
   const trimmedSearch = useMemo(() => searchTerm.trim(), [searchTerm])
 
   const contactsSearch = useContactsSearch(user.id, trimmedSearch)
   const { mutateAsync: importContacts, isPending: isImporting } = useImportContacts(user.id)
   const profileQuery = useProfile(user.id)
   const updateProfile = useUpdateProfile(user.id)
+  const friendsQuery = useFriends(user.id)
+  const addFriendMutation = useAddFriend(user.id)
 
   const searchResults = contactsSearch.data ?? { contacts: [], appUsers: [] }
   const hasSearch = trimmedSearch.length > 0
   const profilePhone = profileQuery.data?.phoneNumber ?? ''
   const phoneDraftNormalized = phoneDraft.trim()
   const profileDirty = phoneDraftNormalized !== (profilePhone ?? '')
+  const friends = friendsQuery.data ?? []
+  const friendContactIds = useMemo(
+    () =>
+      new Set(friends.filter((friend) => friend.friendType === 'contact').map((friend) => friend.referenceId)),
+    [friends],
+  )
+  const friendAppUserIds = useMemo(
+    () =>
+      new Set(friends.filter((friend) => friend.friendType === 'app_user').map((friend) => friend.referenceId)),
+    [friends],
+  )
 
   useEffect(() => {
     if (profileQuery.data) {
@@ -90,6 +106,17 @@ const HomeDashboard = ({
     return () => window.clearTimeout(timer)
   }, [profileSuccess, profileError])
 
+  useEffect(() => {
+    if (!friendFeedback && !friendError) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setFriendFeedback(null)
+      setFriendError(null)
+    }, 4000)
+    return () => window.clearTimeout(timer)
+  }, [friendFeedback, friendError])
+
   const handleSaveProfile = async () => {
     setProfileSuccess(null)
     setProfileError(null)
@@ -102,6 +129,28 @@ const HomeDashboard = ({
       )
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'Failed to update profile.')
+    }
+  }
+
+  const handleAddContactFriend = async (contactId: string, displayName: string) => {
+    setFriendFeedback(null)
+    setFriendError(null)
+    try {
+      const friend = await addFriendMutation.mutateAsync({ sourceType: 'contact', contactId })
+      setFriendFeedback(`Added ${friend.displayName || displayName} to your friends.`)
+    } catch (error) {
+      setFriendError(error instanceof Error ? error.message : 'Unable to add friend right now.')
+    }
+  }
+
+  const handleAddAppUserFriend = async (appUserId: string, displayName: string) => {
+    setFriendFeedback(null)
+    setFriendError(null)
+    try {
+      const friend = await addFriendMutation.mutateAsync({ sourceType: 'app_user', appUserId })
+      setFriendFeedback(`Added ${friend.displayName || displayName} to your friends.`)
+    } catch (error) {
+      setFriendError(error instanceof Error ? error.message : 'Unable to add friend right now.')
     }
   }
 
@@ -304,6 +353,49 @@ const HomeDashboard = ({
               {importFeedback && <p className="text-xs text-green-600">{importFeedback}</p>}
               {importError && <p className="text-xs text-red-600">{importError}</p>}
             </div>
+            <div className="min-h-[1.25rem]">
+              {friendFeedback && <p className="text-xs text-emerald-600">{friendFeedback}</p>}
+              {friendError && <p className="text-xs text-red-600">{friendError}</p>}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Saved friends ({friendsQuery.isLoading ? '…' : friends.length})
+            </h4>
+            {friendsQuery.isLoading ? (
+              <p className="mt-2 text-sm text-slate-500">Loading your friends…</p>
+            ) : friendsQuery.isError ? (
+              <p className="mt-2 text-sm text-red-600">
+                {friendsQuery.error?.message ?? 'We could not load your friends list.'}
+              </p>
+            ) : friends.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                You haven’t added any friends yet. Import contacts or search the directory to get started.
+              </p>
+            ) : (
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+                {friends.map((friend) => (
+                  <li
+                    key={friend.friendId}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                  >
+                    <div className="font-semibold text-slate-900">{friend.displayName}</div>
+                    <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">
+                      {friend.friendType === 'contact' ? 'Added from Google contacts' : 'Meaningful member'}
+                    </div>
+                    <ul className="mt-2 space-y-1 text-xs text-slate-500">
+                      {friend.emails.map((email) => (
+                        <li key={`${friend.friendId}-email-${email}`}>{email}</li>
+                      ))}
+                      {friend.phoneNumbers.map((phone) => (
+                        <li key={`${friend.friendId}-phone-${phone}`}>{phone}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="mt-8">
@@ -369,6 +461,17 @@ const HomeDashboard = ({
                           <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">
                             Imported from Google contacts
                           </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <button
+                              onClick={() => handleAddContactFriend(contact.contactId, primaryLabel)}
+                              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={
+                                friendContactIds.has(contact.contactId) || addFriendMutation.isPending
+                              }
+                            >
+                              {friendContactIds.has(contact.contactId) ? 'Already added' : 'Add to friends'}
+                            </button>
+                          </div>
                         </li>
                       )
                     })}
@@ -385,22 +488,34 @@ const HomeDashboard = ({
                         No Meaningful users match that search just yet.
                       </li>
                     )}
-                    {searchResults.appUsers.map((appUser) => (
-                      <li
-                        key={appUser.userId}
-                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"
-                      >
-                        <p className="font-semibold text-slate-900">{appUser.name ?? 'Meaningful member'}</p>
-                        <ul className="mt-1 space-y-1 text-xs text-slate-500">
-                          {appUser.username && <li>@{appUser.username}</li>}
-                          {appUser.email && <li>{appUser.email}</li>}
-                          {appUser.phoneNumber && <li>{appUser.phoneNumber}</li>}
-                        </ul>
-                        <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">
-                          Found in Meaningful directory
-                        </p>
-                      </li>
-                    ))}
+                    {searchResults.appUsers.map((appUser) => {
+                      const label = appUser.name || appUser.email || appUser.phoneNumber || 'Meaningful member'
+                      return (
+                        <li
+                          key={appUser.userId}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"
+                        >
+                          <p className="font-semibold text-slate-900">{label}</p>
+                          <ul className="mt-1 space-y-1 text-xs text-slate-500">
+                            {appUser.username && <li>@{appUser.username}</li>}
+                            {appUser.email && <li>{appUser.email}</li>}
+                            {appUser.phoneNumber && <li>{appUser.phoneNumber}</li>}
+                          </ul>
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <button
+                              onClick={() => handleAddAppUserFriend(appUser.userId, label)}
+                              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={friendAppUserIds.has(appUser.userId) || addFriendMutation.isPending}
+                            >
+                              {friendAppUserIds.has(appUser.userId) ? 'Already added' : 'Add to friends'}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">
+                            Found in Meaningful directory
+                          </p>
+                        </li>
+                      )
+                    })}
                   </ul>
                 </div>
               </div>

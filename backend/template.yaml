@@ -39,6 +39,7 @@ Globals:
         USERS_TABLE: !Ref UsersTable
         CALENDARS_TABLE: !Ref CalendarsTable
         CONTACTS_TABLE: !Ref ContactsTable
+        FRIENDS_TABLE: !Ref FriendsTable
         GOOGLE_CLIENT_ID: !Ref GoogleClientId
         GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
         FRONTEND_URL: !Ref FrontendUrl
@@ -199,6 +200,38 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref ContactsTable
 
+  FriendsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src
+      Handler: handlers.friends.handler
+      Events:
+        ListFriends:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends
+            Method: GET
+        AddFriend:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends
+            Method: POST
+        OptionsFriends:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends
+            Method: OPTIONS
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContactsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FriendsTable
+
   # DynamoDB Tables
   UsersTable:
     Type: AWS::DynamoDB::Table
@@ -253,6 +286,22 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
+  FriendsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'meaningful-${Stage}-friends'
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: friend_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: friend_id
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
 Outputs:
   ApiEndpoint:
     Description: 'API Gateway endpoint URL'
@@ -283,3 +332,9 @@ Outputs:
     Value: !Ref ContactsTable
     Export:
       Name: !Sub 'meaningful-${Stage}-contacts-table'
+
+  FriendsTableName:
+    Description: 'DynamoDB Friends table name'
+    Value: !Ref FriendsTable
+    Export:
+      Name: !Sub 'meaningful-${Stage}-friends-table'

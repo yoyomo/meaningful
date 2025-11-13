@@ -25,6 +25,7 @@ class DynamoDBService:
         self.dynamodb = create_dynamodb_resource()
         self.users_table = self.dynamodb.Table(os.environ['USERS_TABLE'])
         self.calendars_table = self.dynamodb.Table(os.environ['CALENDARS_TABLE'])
+        self.friends_table = self.dynamodb.Table(os.environ['FRIENDS_TABLE'])
     
     def get_user(self, user_id: str) -> Optional[Dict[str, object]]:
         """Get user by ID"""
