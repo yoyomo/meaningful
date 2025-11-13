@@ -1,5 +1,6 @@
 import os
 from typing import Dict, Any
+from urllib.parse import quote
 from services.google_oauth import GoogleOAuthService
 from utils.http_responses import create_json_response, create_redirect_response, create_error_response
 from utils.env import *  # Load environment variables
@@ -63,8 +64,11 @@ def handle_google_auth_callback(event: Dict[str, Any], context: Any) -> Dict[str
         if result['success']:
             # Redirect back to frontend with success
             user = result['user']
+            name_param = quote(user.get('name', ''))
+            phone_number = user.get('phone_number')
+            phone_param = f"&phone={quote(phone_number)}" if phone_number else ""
             return create_redirect_response(
-                f"{FRONTEND_URL}?auth=success&user_id={user['id']}&name={user['name']}"
+                f"{FRONTEND_URL}?auth=success&user_id={user['id']}&name={name_param}{phone_param}"
             )
         else:
             # Redirect back with error
