@@ -130,9 +130,47 @@ class GoogleOAuthService:
                 }
             }
             
-            # Store or update user in DynamoDB
+            # Store or update user in DynamoDB without losing existing fields (e.g., availability)
             try:
-                self.users_table.put_item(Item=user_data)
+                update_expression_parts = [
+                    "SET #email = :email",
+                    "#name = :name",
+                    "picture = :picture",
+                    "google_tokens = :google_tokens",
+                    "updated_at = :updated_at",
+                    "created_at = if_not_exists(created_at, :created_at)",
+                ]
+                expression_names = {
+                    '#email': 'email',
+                    '#name': 'name',
+                }
+                expression_values = {
+                    ':email': user_data['email'],
+                    ':name': user_data['name'],
+                    ':picture': user_data['picture'],
+                    ':google_tokens': user_data['google_tokens'],
+                    ':updated_at': user_data['updated_at'],
+                    ':created_at': user_data['created_at'],
+                }
+
+                remove_expression = None
+                phone_number = user_data.get('phone_number')
+                if phone_number:
+                    update_expression_parts.append('phone_number = :phone_number')
+                    expression_values[':phone_number'] = phone_number
+                else:
+                    remove_expression = 'REMOVE phone_number'
+
+                update_expression = "SET " + ", ".join(update_expression_parts)
+                if remove_expression:
+                    update_expression = f"{update_expression} {remove_expression}"
+
+                self.users_table.update_item(
+                    Key={'id': user_data['id']},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeNames=expression_names,
+                    ExpressionAttributeValues=expression_values,
+                )
             except Exception as db_error:
                 # Log but don't fail - OAuth succeeded even if DB write failed
                 error_type = type(db_error).__name__
