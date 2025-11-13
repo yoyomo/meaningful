@@ -4,13 +4,16 @@ from typing import Any, Dict, Optional
 from botocore.exceptions import ClientError
 
 from services.friends import FriendsService
+from services.friends_availability import FriendsAvailabilityService
 from utils.http_responses import create_cors_headers, create_error_response, create_json_response
 
 friends_service = FriendsService()
+availability_service = FriendsAvailabilityService()
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     http_method = (event.get("httpMethod") or "").upper()
+    resource = event.get("resource") or ""
 
     if http_method == "OPTIONS":
         return {
@@ -25,11 +28,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if not user_id:
         return create_error_response(400, "User ID is required")
 
+    if http_method == "GET" and resource.endswith("/friends/available-now"):
+        return _handle_available_now(user_id)
+
     if http_method == "GET":
         return _handle_list_friends(user_id)
 
     if http_method == "POST":
         return _handle_add_friend(user_id, event)
+
+    if http_method == "DELETE":
+        friend_id = (path_params.get("friend_id") or "").strip()
+        if not friend_id:
+            return create_error_response(400, "friend_id path parameter is required")
+        return _handle_remove_friend(user_id, friend_id)
 
     return create_error_response(405, "Method not allowed")
 
@@ -69,6 +81,28 @@ def _handle_add_friend(user_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
         return create_error_response(500, "Failed to add friend", str(exc))
 
     return create_json_response(201, {"friend": friend})
+
+
+def _handle_remove_friend(user_id: str, friend_id: str) -> Dict[str, Any]:
+    try:
+        friends_service.remove_friend(user_id, friend_id)
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return create_error_response(404, "Friend not found")
+        return create_error_response(500, "Failed to remove friend", error.response["Error"]["Message"])
+    except Exception as exc:
+        return create_error_response(500, "Failed to remove friend", str(exc))
+
+    return create_json_response(200, {"removed": True})
+
+
+def _handle_available_now(user_id: str) -> Dict[str, Any]:
+    try:
+        result = availability_service.compute_available_now(user_id)
+    except Exception as exc:
+        return create_error_response(500, "Failed to evaluate friend availability", str(exc))
+
+    return create_json_response(200, result)
 
 
 def _parse_json_body(body: Optional[str]) -> Optional[Dict[str, Any]]:

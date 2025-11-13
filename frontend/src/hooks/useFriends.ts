@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_URL } from '../constants'
 
@@ -26,6 +27,31 @@ type AddFriendPayload =
       appUserId: string
     }
 
+export type FriendAvailabilityEntry = {
+  friend: {
+    friendId: string
+    displayName: string
+    friendType: 'contact' | 'app_user'
+    referenceId: string
+    linkedUserId?: string | null
+  }
+  status: 'available' | 'busy' | 'unknown'
+  reason?: string
+  details?: string
+  confidence?: string
+  timezone?: string
+  availableUntil?: string
+  busyUntil?: string
+  nextAvailableAt?: string
+}
+
+export type FriendsAvailableNowData = {
+  available: FriendAvailabilityEntry[]
+  busy: FriendAvailabilityEntry[]
+  unknown: FriendAvailabilityEntry[]
+  generatedAt?: string
+}
+
 const ensureStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return []
@@ -39,7 +65,12 @@ const parseFriendEntry = (input: unknown): Friend | null => {
   }
 
   const data = input as Record<string, unknown>
-  const friendId = typeof data.friend_id === 'string' ? data.friend_id : typeof data.friendId === 'string' ? data.friendId : null
+  const friendId =
+    typeof data.friend_id === 'string'
+      ? data.friend_id
+      : typeof data.friendId === 'string'
+        ? data.friendId
+        : null
   const friendTypeValue = data.friend_type ?? data.friendType
   const friendType =
     friendTypeValue === 'contact' || friendTypeValue === 'app_user' ? friendTypeValue : null
@@ -161,6 +192,153 @@ export const useAddFriend = (userId?: string) => {
       })
       queryClient.invalidateQueries({ queryKey: ['friends', userId] })
     },
+  })
+}
+
+export const useRemoveFriend = (userId?: string) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<{ removed: boolean }, Error, string>({
+    mutationFn: async (friendId) => {
+      if (!userId) {
+        throw new Error('Missing user ID')
+      }
+
+      const response = await fetch(`${API_URL}/users/${userId}/friends/${encodeURIComponent(friendId)}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || 'Failed to remove friend')
+      }
+
+      const payload = (await response.json()) as unknown
+      if (!payload || typeof payload !== 'object') {
+        return { removed: true }
+      }
+
+      const removed = Boolean((payload as Record<string, unknown>).removed)
+      return { removed }
+    },
+    onSuccess: (_, friendId) => {
+      queryClient.setQueryData<Friend[]>(['friends', userId], (existing) => {
+        if (!existing) {
+          return existing
+        }
+        return existing.filter((friend) => friend.friendId !== friendId)
+      })
+      queryClient.invalidateQueries({ queryKey: ['friends', userId] })
+    },
+  })
+}
+
+export const useFriendIdSets = (friends: Friend[] | undefined) => {
+  return useMemo(() => {
+    const ids = new Set<string>()
+    if (!friends) {
+      return ids
+    }
+    for (const friend of friends) {
+      ids.add(friend.friendId)
+    }
+    return ids
+  }, [friends])
+}
+
+const parseAvailabilityEntry = (input: unknown): FriendAvailabilityEntry | null => {
+  if (!input || typeof input !== 'object') {
+    return null
+  }
+
+  const data = input as Record<string, unknown>
+  const friendRaw = data.friend
+  if (!friendRaw || typeof friendRaw !== 'object') {
+    return null
+  }
+
+  const friendData = friendRaw as Record<string, unknown>
+  const friendId = typeof friendData.friendId === 'string' ? friendData.friendId : null
+  const displayName = typeof friendData.displayName === 'string' ? friendData.displayName : null
+  const friendTypeValue = friendData.friendType
+  const friendType =
+    friendTypeValue === 'contact' || friendTypeValue === 'app_user'
+      ? (friendTypeValue as 'contact' | 'app_user')
+      : null
+
+  if (!friendId || !displayName || !friendType) {
+    return null
+  }
+
+  const availabilityEntry: FriendAvailabilityEntry = {
+    friend: {
+      friendId,
+      displayName,
+      friendType,
+      referenceId:
+        typeof friendData.referenceId === 'string'
+          ? friendData.referenceId
+          : typeof friendData.reference_id === 'string'
+            ? friendData.reference_id
+            : '',
+      linkedUserId:
+        typeof friendData.linkedUserId === 'string'
+          ? friendData.linkedUserId
+          : typeof friendData.linked_user_id === 'string'
+            ? friendData.linked_user_id
+            : null,
+    },
+    status:
+      data.status === 'available' || data.status === 'busy' || data.status === 'unknown'
+        ? (data.status as 'available' | 'busy' | 'unknown')
+        : 'unknown',
+    reason: typeof data.reason === 'string' ? data.reason : undefined,
+    details: typeof data.details === 'string' ? data.details : undefined,
+    confidence: typeof data.confidence === 'string' ? data.confidence : undefined,
+    timezone: typeof data.timezone === 'string' ? data.timezone : undefined,
+    availableUntil: typeof data.availableUntil === 'string' ? data.availableUntil : undefined,
+    busyUntil: typeof data.busyUntil === 'string' ? data.busyUntil : undefined,
+    nextAvailableAt: typeof data.nextAvailableAt === 'string' ? data.nextAvailableAt : undefined,
+  }
+
+  return availabilityEntry
+}
+
+const parseAvailableNowResponse = (payload: unknown): FriendsAvailableNowData => {
+  if (!payload || typeof payload !== 'object') {
+    return { available: [], busy: [], unknown: [] }
+  }
+
+  const data = payload as Record<string, unknown>
+  const availableRaw = Array.isArray(data.available) ? data.available : []
+  const busyRaw = Array.isArray(data.busy) ? data.busy : []
+  const unknownRaw = Array.isArray(data.unknown) ? data.unknown : []
+
+  return {
+    available: availableRaw.map(parseAvailabilityEntry).filter((entry): entry is FriendAvailabilityEntry => entry !== null),
+    busy: busyRaw.map(parseAvailabilityEntry).filter((entry): entry is FriendAvailabilityEntry => entry !== null),
+    unknown: unknownRaw.map(parseAvailabilityEntry).filter((entry): entry is FriendAvailabilityEntry => entry !== null),
+    generatedAt: typeof data.generatedAt === 'string' ? data.generatedAt : undefined,
+  }
+}
+
+export const useFriendsAvailableNow = (userId?: string) => {
+  return useQuery<FriendsAvailableNowData, Error>({
+    queryKey: ['friends-available-now', userId],
+    enabled: Boolean(userId),
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      if (!userId) {
+        throw new Error('Missing user ID')
+      }
+      const response = await fetch(`${API_URL}/users/${userId}/friends/available-now`)
+      if (!response.ok) {
+        throw new Error('Failed to evaluate friend availability')
+      }
+      const payload = (await response.json()) as unknown
+      return parseAvailableNowResponse(payload)
+    },
+    initialData: { available: [], busy: [], unknown: [] },
   })
 }
 
