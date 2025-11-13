@@ -5,6 +5,7 @@ import { API_URL, AUTH_TTL_MS, STORAGE_KEY } from '../constants'
 type AuthUser = {
   id: string
   name: string
+  phoneNumber?: string | null
 }
 
 type GoogleAuthResponse = {
@@ -42,7 +43,17 @@ const readPersistedUser = (): AuthUser | null => {
       return null
     }
 
-    return parsed.user
+    const user = parsed.user
+    if (!user || typeof user.id !== 'string' || typeof user.name !== 'string') {
+      localStorage.removeItem(STORAGE_KEY)
+      return null
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      phoneNumber: typeof user.phoneNumber === 'string' ? user.phoneNumber : null,
+    }
   } catch (err) {
     localStorage.removeItem(STORAGE_KEY)
     return null
@@ -54,6 +65,7 @@ const readAuthStateFromUrl = (): AuthUrlState => {
   const authResult = urlParams.get('auth')
   const userId = urlParams.get('user_id')
   const userName = urlParams.get('name')
+  const phoneNumber = urlParams.get('phone')
   const authError = urlParams.get('error')
 
   if (authResult === 'success' && userId) {
@@ -62,6 +74,7 @@ const readAuthStateFromUrl = (): AuthUrlState => {
       user: {
         id: userId,
         name: decodeURIComponent(userName || ''),
+        phoneNumber: phoneNumber ? decodeURIComponent(phoneNumber) : null,
       },
       error: null,
     }
@@ -129,6 +142,21 @@ export const useAuth = () => {
       window.history.replaceState({}, document.title, '/')
     }
   }, [authUrlState, isInitializing, queryClient])
+
+  useEffect(() => {
+    if (isInitializing) {
+      return
+    }
+
+    if (currentUser) {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ user: currentUser, expiresAt: Date.now() + AUTH_TTL_MS }),
+      )
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }, [currentUser, isInitializing])
 
   const {
     mutate: signIn,

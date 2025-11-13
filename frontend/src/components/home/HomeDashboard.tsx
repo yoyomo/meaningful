@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AuthUser } from '../../hooks/useAuth'
 import { useContactsSearch, useImportContacts } from '../../hooks/useContacts'
+import { useProfile, useUpdateProfile } from '../../hooks/useProfile'
 import type { Availability } from '../../shared/availability'
 
 type InvitationDetails = {
@@ -56,13 +57,53 @@ const HomeDashboard = ({
   const [searchTerm, setSearchTerm] = useState('')
   const [importFeedback, setImportFeedback] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [phoneDraft, setPhoneDraft] = useState('')
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
+  const [profileError, setProfileError] = useState<string | null>(null)
   const trimmedSearch = useMemo(() => searchTerm.trim(), [searchTerm])
 
   const contactsSearch = useContactsSearch(user.id, trimmedSearch)
   const { mutateAsync: importContacts, isPending: isImporting } = useImportContacts(user.id)
+  const profileQuery = useProfile(user.id)
+  const updateProfile = useUpdateProfile(user.id)
 
   const searchResults = contactsSearch.data ?? { contacts: [], appUsers: [] }
   const hasSearch = trimmedSearch.length > 0
+  const profilePhone = profileQuery.data?.phoneNumber ?? ''
+  const phoneDraftNormalized = phoneDraft.trim()
+  const profileDirty = phoneDraftNormalized !== (profilePhone ?? '')
+
+  useEffect(() => {
+    if (profileQuery.data) {
+      setPhoneDraft(profileQuery.data.phoneNumber ?? '')
+    }
+  }, [profileQuery.data?.phoneNumber])
+
+  useEffect(() => {
+    if (!profileSuccess && !profileError) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setProfileSuccess(null)
+      setProfileError(null)
+    }, 4000)
+    return () => window.clearTimeout(timer)
+  }, [profileSuccess, profileError])
+
+  const handleSaveProfile = async () => {
+    setProfileSuccess(null)
+    setProfileError(null)
+    try {
+      const result = await updateProfile.mutateAsync({
+        phoneNumber: phoneDraftNormalized.length > 0 ? phoneDraftNormalized : null,
+      })
+      setProfileSuccess(
+        result.phoneNumber ? 'Phone number updated.' : 'Phone number removed from your profile.',
+      )
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Failed to update profile.')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -146,6 +187,87 @@ const HomeDashboard = ({
               </ul>
             </div>
           </article>
+        </section>
+
+        <section className="rounded-3xl border border-slate-100 bg-white px-8 py-10 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-blue-600">Profile</p>
+              <h3 className="mt-2 text-2xl font-semibold text-slate-900">Keep your contact info current</h3>
+              <p className="mt-2 max-w-xl text-sm text-slate-600">
+                Add a phone number so friends can find you and we can support SMS-based logins and notifications later.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 max-w-lg">
+            {profileQuery.isLoading ? (
+              <div className="flex items-center gap-3 text-slate-500">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+                Loading your profile…
+              </div>
+            ) : profileQuery.isError ? (
+              <p className="text-sm text-red-600">
+                {profileQuery.error?.message ?? 'We could not load your profile just yet.'}
+              </p>
+            ) : (
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (!profileDirty || updateProfile.isPending) {
+                    return
+                  }
+                  void handleSaveProfile()
+                }}
+              >
+                <div>
+                  <label className="text-sm font-medium text-slate-700" htmlFor="profile-phone">
+                    Phone number
+                  </label>
+                  <input
+                    id="profile-phone"
+                    type="tel"
+                    value={phoneDraft}
+                    onChange={(event) => setPhoneDraft(event.target.value)}
+                    placeholder="e.g. +1 415 555 0199"
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    We recommend international format (e.g. +1 415 555 0199). Leave blank to remove it.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    disabled={!profileDirty || updateProfile.isPending}
+                  >
+                    {updateProfile.isPending && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    )}
+                    Save phone
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoneDraft(profilePhone ?? '')
+                    }}
+                    className="text-sm font-medium text-slate-500 hover:text-slate-900"
+                    disabled={updateProfile.isPending}
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                <div className="min-h-[1.5rem]">
+                  {profileSuccess && <p className="text-sm text-emerald-600">{profileSuccess}</p>}
+                  {profileError && <p className="text-sm text-red-600">{profileError}</p>}
+                </div>
+              </form>
+            )}
+          </div>
         </section>
 
         <section className="rounded-3xl border border-slate-100 bg-white px-8 py-10 shadow-sm">
