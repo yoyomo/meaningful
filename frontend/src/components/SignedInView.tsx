@@ -23,23 +23,27 @@ const computeHasSavedAvailability = (weeklySlots: Availability['weekly']) => {
 type PageState = 'home' | 'availability' | 'loading'
 
 const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
-  const availabilityState = useAvailability(user.id)
+  const {
+    data: availability,
+    isLoading,
+    isRefetching,
+  } = useAvailability(user.id)
   const [activePage, setActivePage] = useState<PageState>('loading')
 
   const hasSavedAvailability = useMemo(() => {
-    if (!availabilityState.data) {
+    if (!availability) {
       return false
     }
 
-    if (availabilityState.data.updatedAt) {
+    if (availability.updatedAt) {
       return true
     }
 
-    return computeHasSavedAvailability(availabilityState.data.weekly)
-  }, [availabilityState.data])
+    return computeHasSavedAvailability(availability.weekly)
+  }, [availability])
 
   useEffect(() => {
-    if (availabilityState.isLoading || availabilityState.isRefetching) {
+    if (isLoading || isRefetching) {
       setActivePage('loading')
       return
     }
@@ -49,7 +53,7 @@ const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
     } else {
       setActivePage('availability')
     }
-  }, [availabilityState.isLoading, availabilityState.isRefetching, hasSavedAvailability])
+  }, [isLoading, isRefetching, hasSavedAvailability])
 
   if (activePage === 'loading') {
     return (
@@ -76,8 +80,8 @@ const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
     <HomeDashboard
       user={user}
       invitation={invitation}
-      availability={availabilityState.data}
-      isAvailabilityLoading={availabilityState.isLoading || availabilityState.isRefetching}
+      availability={availability}
+      isAvailabilityLoading={isLoading || isRefetching}
       onEditAvailability={() => setActivePage('availability')}
       onSignOut={onSignOut}
     />
