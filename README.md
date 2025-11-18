@@ -86,6 +86,7 @@ Run `make help` to see all available commands:
 - `make deploy` - Deploy to AWS
 
 ### Code Style
+See [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md) for detailed coding standards and policies.
 - Arrow functions enforced by ESLint: `const fn = () => {}`
 - Auto-formatting with `make format`
 

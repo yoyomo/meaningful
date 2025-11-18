@@ -5,18 +5,15 @@ import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
 import { Spinner } from '../ui/Spinner'
 import { StatusMessage } from '../ui/StatusMessage'
-import type { UseQueryResult } from '@tanstack/react-query'
-
-type Profile = {
-  phoneNumber: string | null
-}
+import { useProfile, useUpdateProfile } from '../../hooks/useProfile'
 
 type ProfileSectionProps = {
-  profileQuery: UseQueryResult<Profile, Error>
-  onUpdate: (phoneNumber: string | null) => Promise<Profile>
+  userId: string
 }
 
-export const ProfileSection = ({ profileQuery, onUpdate }: ProfileSectionProps) => {
+export const ProfileSection = ({ userId }: ProfileSectionProps) => {
+  const profileQuery = useProfile(userId)
+  const updateProfile = useUpdateProfile(userId)
   const [phoneDraft, setPhoneDraft] = useState('')
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -44,7 +41,9 @@ export const ProfileSection = ({ profileQuery, onUpdate }: ProfileSectionProps) 
     setSuccess(null)
     setError(null)
     try {
-      const result = await onUpdate(phoneDraftNormalized.length > 0 ? phoneDraftNormalized : null)
+      const result = await updateProfile.mutateAsync({
+        phoneNumber: phoneDraftNormalized.length > 0 ? phoneDraftNormalized : null,
+      })
       setSuccess(result.phoneNumber ? 'Phone number updated.' : 'Phone number removed from your profile.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile.')

@@ -1,24 +1,21 @@
-import { useState, useEffect } from 'react'
-import type { UseQueryResult, UseMutationResult } from '@tanstack/react-query'
+import { useState, useEffect, useMemo } from 'react'
 import { Card } from '../ui/Card'
 import { SectionHeader } from '../ui/SectionHeader'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
-import { Spinner } from '../ui/Spinner'
 import { StatusMessage } from '../ui/StatusMessage'
 import { FriendCard, ContactCard } from '../friends'
-import { useContactsSearch } from '../../hooks/useContacts'
-import type { Friend, FriendAvailabilityEntry, FriendsAvailableNowData } from '../../hooks/useFriends'
-import type { ContactEntry, AppUserEntry } from '../../hooks/useContacts'
+import { useContactsSearch, useImportContacts } from '../../hooks/useContacts'
+import {
+  useAddFriend,
+  useFriendIdSets,
+  useFriends,
+  useFriendsAvailableNow,
+  useRemoveFriend,
+} from '../../hooks/useFriends'
 
 type FriendsSectionProps = {
   userId: string
-  friendsQuery: UseQueryResult<Friend[], Error>
-  availableNowQuery: UseQueryResult<FriendsAvailableNowData, Error>
-  addFriendMutation: UseMutationResult<Friend, Error, { sourceType: 'contact'; contactId: string } | { sourceType: 'app_user'; appUserId: string }>
-  removeFriendMutation: UseMutationResult<{ removed: boolean }, Error, string>
-  importContactsMutation: UseMutationResult<{ success: boolean; imported: number; providers: string[] }, Error, { maxConnections?: number } | void>
-  friendIds: Set<string>
 }
 
 const FRIEND_AVAILABILITY_REASON_MESSAGES: Record<string, string> = {
@@ -56,15 +53,7 @@ const resolveAvailabilityReason = (reason?: string) => {
   return FRIEND_AVAILABILITY_REASON_MESSAGES[reason] ?? reason
 }
 
-export const FriendsSection = ({
-  userId,
-  friendsQuery,
-  availableNowQuery,
-  addFriendMutation,
-  removeFriendMutation,
-  importContactsMutation,
-  friendIds,
-}: FriendsSectionProps) => {
+export const FriendsSection = ({ userId }: FriendsSectionProps) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [importFeedback, setImportFeedback] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
@@ -73,12 +62,20 @@ export const FriendsSection = ({
   const [pendingFriendId, setPendingFriendId] = useState<string | null>(null)
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
 
-  const trimmedSearch = searchTerm.trim()
+  const trimmedSearch = useMemo(() => searchTerm.trim(), [searchTerm])
   const hasSearch = trimmedSearch.length > 0
+
+  const friendsQuery = useFriends(userId)
+  const addFriendMutation = useAddFriend(userId)
+  const removeFriendMutation = useRemoveFriend(userId)
+  const availableNowQuery = useFriendsAvailableNow(userId)
+  const importContactsMutation = useImportContacts(userId)
   const contactsSearch = useContactsSearch(userId, trimmedSearch)
-  const searchResults = contactsSearch.data ?? { contacts: [], appUsers: [] }
+
   const friends = friendsQuery.data ?? []
+  const friendIds = useFriendIdSets(friends)
   const friendsAvailability = availableNowQuery.data ?? { available: [], busy: [], unknown: [] }
+  const searchResults = contactsSearch.data ?? { contacts: [], appUsers: [] }
 
   const handleAddContactFriend = async (contactId: string, displayName: string) => {
     const friendId = `contact#${contactId}`

@@ -1,13 +1,4 @@
 import type { AuthUser } from '../../hooks/useAuth'
-import { useImportContacts } from '../../hooks/useContacts'
-import { useProfile, useUpdateProfile } from '../../hooks/useProfile'
-import {
-  useAddFriend,
-  useFriendIdSets,
-  useFriends,
-  useFriendsAvailableNow,
-  useRemoveFriend,
-} from '../../hooks/useFriends'
 import type { Availability } from '../../shared/availability'
 import { AppHeader } from '../ui/AppHeader'
 import { Card } from '../ui/Card'
@@ -42,20 +33,6 @@ const HomeDashboard = ({
     ? `${invitation.inviterName} invited you to plan a Meaningful call.`
     : 'Plan effortless catch-ups and let us sync the calendars for you.'
 
-  const importContactsMutation = useImportContacts(user.id)
-  const profileQuery = useProfile(user.id)
-  const updateProfile = useUpdateProfile(user.id)
-  const friendsQuery = useFriends(user.id)
-  const addFriendMutation = useAddFriend(user.id)
-  const removeFriendMutation = useRemoveFriend(user.id)
-  const availableNowQuery = useFriendsAvailableNow(user.id)
-  const friendIds = useFriendIdSets(friendsQuery.data ?? [])
-
-
-  const handleUpdateProfile = async (phoneNumber: string | null) => {
-    return updateProfile.mutateAsync({ phoneNumber })
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <AppHeader title="Your catch-up hub" logo onSignOut={onSignOut} />
@@ -88,17 +65,9 @@ const HomeDashboard = ({
           </Card>
         </section>
 
-        <ProfileSection profileQuery={profileQuery} onUpdate={handleUpdateProfile} />
+        <ProfileSection userId={user.id} />
 
-        <FriendsSection
-          userId={user.id}
-          friendsQuery={friendsQuery}
-          availableNowQuery={availableNowQuery}
-          addFriendMutation={addFriendMutation}
-          removeFriendMutation={removeFriendMutation}
-          importContactsMutation={importContactsMutation}
-          friendIds={friendIds}
-        />
+        <FriendsSection userId={user.id} />
       </main>
     </div>
   )
