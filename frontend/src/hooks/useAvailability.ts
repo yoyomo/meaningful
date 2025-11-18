@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_URL } from '../constants'
-import { Availability, createEmptyAvailability, parseAvailabilityResponse } from '../shared/availability'
+import { Availability, createEmptyAvailability, parseAvailability } from '../shared/availability'
 
 type UseAvailabilityResult = UseQueryResult<Availability, Error> & {
   data: Availability
@@ -25,6 +25,8 @@ export const useAvailability = (userId?: string): UseAvailabilityResult => {
   const [wasJustSaved, setWasJustSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  const initialAvailability = useMemo(() => resolveInitialAvailability(), [])
+
   const availabilityQuery = useQuery<Availability, Error>({
     queryKey: ['availability', userId],
     enabled: Boolean(userId),
@@ -34,10 +36,10 @@ export const useAvailability = (userId?: string): UseAvailabilityResult => {
         throw new Error('Failed to load availability')
       }
 
-      const payload = (await response.json()) as unknown
-      return parseAvailabilityResponse(payload)
+      const payload = await response.json()
+      return parseAvailability(payload.availability)
     },
-    initialData: resolveInitialAvailability,
+    initialData: initialAvailability,
   })
 
   const saveMutation = useMutation<Availability, Error, Availability>({
@@ -62,8 +64,8 @@ export const useAvailability = (userId?: string): UseAvailabilityResult => {
         throw new Error(message || 'Failed to save availability')
       }
 
-      const payload = (await response.json()) as unknown
-      return parseAvailabilityResponse(payload)
+      const payload = await response.json()
+      return parseAvailability(payload)
     },
     onMutate: () => {
       setSaveError(null)
@@ -86,7 +88,7 @@ export const useAvailability = (userId?: string): UseAvailabilityResult => {
     return () => window.clearTimeout(timer)
   }, [saveMutation.isError])
 
-  const availability = availabilityQuery.data ?? resolveInitialAvailability()
+  const availability = availabilityQuery.data ?? initialAvailability
 
   return {
     ...availabilityQuery,

@@ -123,12 +123,3 @@ export const parseAvailability = (value: unknown): Availability => {
   }
 }
 
-export const parseAvailabilityResponse = (value: unknown): Availability => {
-  if (typeof value !== 'object' || value === null) {
-    throw new Error('Availability response must be an object')
-  }
-
-  const candidate = value as Record<string, unknown>
-  return parseAvailability(candidate.availability)
-}
-
