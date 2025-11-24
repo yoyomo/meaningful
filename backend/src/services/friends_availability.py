@@ -336,13 +336,25 @@ class FriendsAvailabilityService:
         if not owner_record:
             raise ValueError("Unable to load your profile")
 
-        owner_email = owner_record.get("email")
-        if not owner_email:
-            raise ValueError("Your Meaningful account is missing an email address")
-
         owner_tokens = owner_record.get("google_tokens")
+        if owner_tokens is None:
+            raise ValueError(
+                "Google Calendar is not connected. Please sign out completely, then sign back in with Google. "
+                "Make sure to grant all calendar permissions when prompted."
+            )
         if not isinstance(owner_tokens, Dict):
-            raise ValueError("Connect your Google Calendar before scheduling invites")
+            token_type = type(owner_tokens).__name__
+            raise ValueError(
+                f"Google Calendar tokens are in an unexpected format (got {token_type}, expected dict). "
+                "Please sign out completely, then sign back in with Google to reconnect your calendar."
+            )
+        
+        # Verify we have the required token fields
+        if not owner_tokens.get("refresh_token"):
+            raise ValueError(
+                "Google Calendar connection is incomplete (missing refresh token). "
+                "Please sign out completely, then sign back in with Google and grant all permissions."
+            )
 
         friend = self.friends_service.get_friend(user_id, friend_id)
         if not friend:
@@ -372,10 +384,10 @@ class FriendsAvailabilityService:
         except Exception:
             timezone_name = "UTC"
 
-        attendees = [
-            {"email": owner_email, "responseStatus": "accepted"},
-            {"email": friend_email},
-        ]
+        attendees = [{"email": friend_email}]
+        owner_email = owner_record.get("email")
+        if isinstance(owner_email, str) and owner_email.strip():
+            attendees.insert(0, {"email": owner_email.strip(), "responseStatus": "accepted"})
 
         event_body = {
             "summary": summary,
@@ -398,13 +410,22 @@ class FriendsAvailabilityService:
             },
         }
 
-        event, refreshed_tokens = self.google_calendar_service.create_event(
-            owner_tokens,
-            event_body,
-            conference_data=True,
-        )
-        if refreshed_tokens:
-            self.dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
+        try:
+            event, refreshed_tokens = self.google_calendar_service.create_event(
+                owner_tokens,
+                event_body,
+                conference_data=True,
+            )
+            if refreshed_tokens:
+                self.dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
+        except RuntimeError as exc:
+            error_msg = str(exc).lower()
+            if any(keyword in error_msg for keyword in ["insufficient", "scope", "permission", "403", "access_denied"]):
+                raise ValueError(
+                    "Your Google Calendar connection is missing required permissions to create events. "
+                    "Please sign out completely, then sign back in to grant the new calendar event permissions."
+                ) from exc
+            raise ValueError(f"Failed to create calendar event: {str(exc)}") from exc
 
         return {
             "status": "scheduled",
