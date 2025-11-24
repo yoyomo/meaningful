@@ -65,7 +65,7 @@ export const useAvailability = (userId?: string): UseAvailabilityResult => {
       }
 
       const payload = await response.json()
-      return parseAvailability(payload)
+      return parseAvailability(payload.availability)
     },
     onMutate: () => {
       setSaveError(null)
