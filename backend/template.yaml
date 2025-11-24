@@ -230,6 +230,12 @@ Resources:
             RestApiId: !Ref MeaningfulApi
             Path: /users/{user_id}/friends/{friend_id}
             Method: DELETE
+        MatchSlot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/match-slot
+            Method: POST
         OptionsFriends:
           Type: Api
           Properties:
@@ -247,6 +253,12 @@ Resources:
           Properties:
             RestApiId: !Ref MeaningfulApi
             Path: /users/{user_id}/friends/available-now
+            Method: OPTIONS
+        OptionsFriendsMatchSlot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/match-slot
             Method: OPTIONS
       Policies:
         - DynamoDBCrudPolicy:

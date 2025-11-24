@@ -4,7 +4,7 @@ import { SectionHeader } from '../ui/SectionHeader'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
 import { StatusMessage } from '../ui/StatusMessage'
-import { FriendCard, ContactCard } from '../friends'
+import { FriendCard, ContactCard, FriendMatchPlanner } from '../friends'
 import { useContactsSearch, useImportContacts } from '../../hooks/useContacts'
 import {
   useAddFriend,
@@ -299,6 +299,10 @@ export const FriendsSection = ({ userId }: FriendsSectionProps) => {
             )}
           </div>
         )}
+      </div>
+
+      <div className="mt-8">
+        <FriendMatchPlanner userId={userId} friends={friends} />
       </div>
 
       <div className="mt-8">

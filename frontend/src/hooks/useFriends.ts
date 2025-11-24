@@ -48,6 +48,49 @@ export type FriendsAvailableNowData = {
   generatedAt?: string
 }
 
+export type FriendMatchParticipant = {
+  friend: {
+    friendId: string
+    displayName?: string
+    friendType?: string
+    referenceId?: string
+  }
+  status: string
+  timezone?: string
+  googleConnected: boolean
+  details?: string
+  linkedUserId?: string | null
+}
+
+export type FriendMatchRecommendation = {
+  start: string
+  end: string
+  confidence: 'high' | 'medium' | 'low'
+}
+
+export type FriendMatchResponse = {
+  status: 'matched' | 'needs_setup' | 'no_overlap' | 'pending'
+  requestedFriendIds: string[]
+  searchWindow: {
+    targetDaysAhead: number
+    windowDays: number
+    durationMinutes: number
+    startsAt: string
+    endsAt: string
+  }
+  participants: FriendMatchParticipant[]
+  recommendation: FriendMatchRecommendation | null
+  alternatives: { start: string; end: string }[]
+  notes: string[]
+}
+
+export type FriendMatchRequest = {
+  friendIds: string[]
+  durationMinutes?: number
+  daysFromNow?: number
+  windowDays?: number
+}
+
 const ensureStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return []
@@ -335,6 +378,31 @@ export const useFriendsAvailableNow = (userId?: string) => {
       return parseAvailableNowResponse(payload)
     },
     initialData: { available: [], busy: [], unknown: [] },
+  })
+}
+
+export const useFriendMatch = (userId?: string) => {
+  return useMutation<FriendMatchResponse, Error, FriendMatchRequest>({
+    mutationFn: async (payload) => {
+      if (!userId) {
+        throw new Error('Missing user ID')
+      }
+      if (!payload.friendIds || payload.friendIds.length < 1) {
+        throw new Error('Select a friend to match')
+      }
+      const response = await fetch(`${API_URL}/users/${userId}/friends/match-slot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || 'Failed to compute a matching slot')
+      }
+      return (await response.json()) as FriendMatchResponse
+    },
   })
 }
 

@@ -31,6 +31,10 @@ class FriendsService:
         items.sort(key=lambda item: item.get("created_at", ""), reverse=True)
         return items
 
+    def get_friend(self, user_id: str, friend_id: str) -> Optional[Dict[str, Any]]:
+        response = self.friends_table.get_item(Key={"user_id": user_id, "friend_id": friend_id})
+        return response.get("Item")
+
     def add_friend_from_contact(self, user_id: str, contact_id: str) -> Dict[str, Any]:
         contact = self._get_contact(user_id, contact_id)
         if not contact:

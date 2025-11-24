@@ -31,6 +31,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if http_method == "GET" and resource.endswith("/friends/available-now"):
         return _handle_available_now(user_id)
 
+    if http_method == "POST" and resource.endswith("/friends/match-slot"):
+        return _handle_match_slot(user_id, event)
+
     if http_method == "GET":
         return _handle_list_friends(user_id)
 
@@ -103,6 +106,45 @@ def _handle_available_now(user_id: str) -> Dict[str, Any]:
         return create_error_response(500, "Failed to evaluate friend availability", str(exc))
 
     return create_json_response(200, result)
+
+
+def _handle_match_slot(user_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _parse_json_body(event.get("body"))
+    if payload is None:
+        return create_error_response(400, "Invalid JSON payload")
+
+    raw_friend_ids = payload.get("friendIds")
+    if not isinstance(raw_friend_ids, list):
+        return create_error_response(400, "friendIds must be an array containing at least one friend ID")
+
+    friend_ids = []
+    for entry in raw_friend_ids:
+        if isinstance(entry, str) and entry.strip():
+            friend_ids.append(entry.strip())
+    if len(friend_ids) != 1:
+        return create_error_response(400, "friendIds must contain exactly one valid friend ID")
+
+    try:
+        duration = int(payload.get("durationMinutes", 60))
+        days_from_now = int(payload.get("daysFromNow", 14))
+        window_days = int(payload.get("windowDays", 7))
+    except (TypeError, ValueError):
+        return create_error_response(400, "durationMinutes, daysFromNow, and windowDays must be numbers")
+
+    try:
+        match = availability_service.recommend_meeting_slot(
+            user_id,
+            friend_ids,
+            duration_minutes=duration,
+            target_days_ahead=days_from_now,
+            window_days=window_days,
+        )
+    except ValueError as exc:
+        return create_error_response(400, str(exc))
+    except Exception as exc:
+        return create_error_response(500, "Failed to compute a matching slot", str(exc))
+
+    return create_json_response(200, match)
 
 
 def _parse_json_body(body: Optional[str]) -> Optional[Dict[str, Any]]:

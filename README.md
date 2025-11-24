@@ -37,6 +37,10 @@ meaningful/
 - Call scheduling
 - Calendar integration
 
+## Availability Tools
+- **Available Now** – surfaces friends who are free right now by cross-referencing weekly availability with their Google Calendar busy slots.
+- **Friend Match (new)** – pick any two Meaningful friends and we’ll recommend the earliest overlapping 60‑minute slot about two weeks out, including alternates when possible.
+
 ## Getting Started
 
 ### Quick Start with Makefile
