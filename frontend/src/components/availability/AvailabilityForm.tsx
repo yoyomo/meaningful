@@ -25,11 +25,7 @@ type AvailabilityFormProps = {
   isRefetching: boolean
   saveError: string | null
   wasJustSaved: boolean
-<<<<<<< HEAD
-  onSave: (availability: Availability) => Promise<void>
-=======
   onSave: (availability: Availability) => Promise<Availability>
->>>>>>> 700ad1848d828870a08e4b78f3058a7e190b7ee6
 }
 
 export const AvailabilityForm = ({

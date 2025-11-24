@@ -9,13 +9,6 @@ export type UserProfile = {
   phoneNumber: string | null
 }
 
-<<<<<<< HEAD
-type ProfileResponse = {
-  profile: UserProfile
-}
-
-=======
->>>>>>> 700ad1848d828870a08e4b78f3058a7e190b7ee6
 type UpdateProfilePayload = {
   name?: string | null
   phoneNumber?: string | null
