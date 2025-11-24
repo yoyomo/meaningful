@@ -34,6 +34,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if http_method == "POST" and resource.endswith("/friends/match-slot"):
         return _handle_match_slot(user_id, event)
 
+    if http_method == "POST" and resource.endswith("/friends/schedule-slot"):
+        return _handle_schedule_slot(user_id, event)
+
     if http_method == "GET":
         return _handle_list_friends(user_id)
 
@@ -145,6 +148,39 @@ def _handle_match_slot(user_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
         return create_error_response(500, "Failed to compute a matching slot", str(exc))
 
     return create_json_response(200, match)
+
+
+def _handle_schedule_slot(user_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _parse_json_body(event.get("body"))
+    if payload is None:
+        return create_error_response(400, "Invalid JSON payload")
+
+    friend_id = payload.get("friendId")
+    start = payload.get("start")
+    end = payload.get("end")
+    title = payload.get("title")
+    notes = payload.get("notes")
+
+    if not isinstance(friend_id, str) or not friend_id.strip():
+        return create_error_response(400, "friendId is required")
+    if not isinstance(start, str) or not isinstance(end, str):
+        return create_error_response(400, "start and end are required ISO8601 timestamps")
+
+    try:
+        result = availability_service.schedule_meeting_slot(
+            user_id,
+            friend_id.strip(),
+            start=start,
+            end=end,
+            title=title if isinstance(title, str) and title.strip() else None,
+            notes=notes if isinstance(notes, str) and notes.strip() else None,
+        )
+    except ValueError as exc:
+        return create_error_response(400, str(exc))
+    except Exception as exc:
+        return create_error_response(500, "Failed to schedule meeting", str(exc))
+
+    return create_json_response(200, result)
 
 
 def _parse_json_body(body: Optional[str]) -> Optional[Dict[str, Any]]:

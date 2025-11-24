@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../ui/Button'
 import { StatusMessage } from '../ui/StatusMessage'
-import type { Friend, FriendMatchResponse } from '../../hooks/useFriends'
-import { useFriendMatch } from '../../hooks/useFriends'
+import type { Friend, FriendMatchResponse, ScheduleSlotResponse } from '../../hooks/useFriends'
+import { useFriendMatch, useScheduleFriendSlot } from '../../hooks/useFriends'
 
 type FriendMatchPlannerProps = {
   userId: string
@@ -35,6 +35,14 @@ const formatSlotRange = (startIso: string | undefined, endIso: string | undefine
   return `${dateFormatter.format(start)} · ${timeFormatter.format(start)} – ${timeFormatter.format(end)}`
 }
 
+type SlotWindow = { start?: string; end?: string }
+
+type ScheduleControls = {
+  onSchedule: (slot: SlotWindow) => void
+  isPending: boolean
+  isDisabled: boolean
+}
+
 const renderParticipants = (match: FriendMatchResponse, selfFriendId?: string) => {
   if (match.participants.length === 0) return null
   return (
@@ -55,7 +63,7 @@ const renderParticipants = (match: FriendMatchResponse, selfFriendId?: string) =
   )
 }
 
-const renderMatchResult = (match: FriendMatchResponse) => {
+const renderMatchResult = (match: FriendMatchResponse, scheduleControls?: ScheduleControls) => {
   if (!match) return null
   if (match.status === 'matched' && match.recommendation) {
     const confidenceCopy = CONFIDENCE_COPY[match.recommendation.confidence] ?? 'Availability combined from all sources.'
@@ -64,12 +72,35 @@ const renderMatchResult = (match: FriendMatchResponse) => {
         <p className="text-sm font-semibold text-emerald-900">Recommended slot</p>
         <p className="text-base text-emerald-800">{formatSlotRange(match.recommendation.start, match.recommendation.end)}</p>
         <p className="text-xs text-emerald-700">{confidenceCopy}</p>
+        {scheduleControls && match.recommendation.start && match.recommendation.end && (
+          <div className="mt-3">
+            <Button
+              variant="secondary"
+              onClick={() => scheduleControls.onSchedule(match.recommendation)}
+              disabled={scheduleControls.isDisabled}
+            >
+              {scheduleControls.isPending ? 'Scheduling…' : 'Schedule this slot'}
+            </Button>
+          </div>
+        )}
         {match.alternatives.length > 0 && (
           <div className="mt-3 text-sm text-slate-600">
             <p className="font-semibold text-slate-800">Alternatives</p>
             <ul className="mt-1 space-y-1 text-xs">
               {match.alternatives.map((slot) => (
-                <li key={`${slot.start}-${slot.end}`}>{formatSlotRange(slot.start, slot.end)}</li>
+                <li key={`${slot.start}-${slot.end}`} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{formatSlotRange(slot.start, slot.end)}</span>
+                  {scheduleControls && slot.start && slot.end && (
+                    <button
+                      type="button"
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 disabled:text-slate-400"
+                      onClick={() => scheduleControls.onSchedule(slot)}
+                      disabled={scheduleControls.isDisabled}
+                    >
+                      {scheduleControls.isPending ? 'Scheduling…' : 'Schedule'}
+                    </button>
+                  )}
+                </li>
               ))}
             </ul>
           </div>
@@ -108,14 +139,20 @@ export const FriendMatchPlanner = ({ userId, friends }: FriendMatchPlannerProps)
   )
   const [selectedFriendId, setSelectedFriendId] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
+  const [scheduledEvent, setScheduledEvent] = useState<ScheduleSlotResponse['event'] | null>(null)
   const matchMutation = useFriendMatch(userId)
+  const scheduleMutation = useScheduleFriendSlot(userId)
 
   const canSubmit = Boolean(selectedFriendId)
   const isDisabled = !canSubmit || matchMutation.isPending
+  const canSchedule = Boolean(selectedFriendId) && matchMutation.data?.status === 'matched'
 
   const handleSubmit = async () => {
     if (!canSubmit) return
     setError(null)
+    setScheduleError(null)
+    setScheduledEvent(null)
     try {
       await matchMutation.mutateAsync({
         friendIds: [selectedFriendId],
@@ -127,6 +164,35 @@ export const FriendMatchPlanner = ({ userId, friends }: FriendMatchPlannerProps)
       setError(err instanceof Error ? err.message : 'Unable to match availability right now.')
     }
   }
+
+  const handleScheduleSlot = async (slot: SlotWindow) => {
+    if (!slot.start || !slot.end || !selectedFriendId) return
+    setScheduleError(null)
+    setScheduledEvent(null)
+    try {
+      const result = await scheduleMutation.mutateAsync({
+        friendId: selectedFriendId,
+        start: slot.start,
+        end: slot.end,
+      })
+      setScheduledEvent(result.event ?? null)
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : 'Unable to schedule this meeting right now.')
+    }
+  }
+
+  useEffect(() => {
+    setScheduleError(null)
+    setScheduledEvent(null)
+  }, [selectedFriendId])
+
+  const scheduleControls: ScheduleControls | undefined = canSchedule
+    ? {
+        onSchedule: handleScheduleSlot,
+        isPending: scheduleMutation.isPending,
+        isDisabled: scheduleMutation.isPending || !selectedFriendId,
+      }
+    : undefined
 
   return (
     <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-6">
@@ -171,10 +237,39 @@ export const FriendMatchPlanner = ({ userId, friends }: FriendMatchPlannerProps)
           </div>
 
           {error && <StatusMessage type="error" message={error} className="mt-3 text-sm" />}
+          {scheduleError && <StatusMessage type="error" message={scheduleError} className="mt-3 text-sm" />}
+          {scheduledEvent && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <p className="font-semibold">Invite sent!</p>
+              <p className="text-xs text-emerald-800">We scheduled the meeting on your Google Calendar.</p>
+              <div className="mt-2 space-y-1 text-xs">
+                {scheduledEvent.htmlLink && (
+                  <a
+                    href={scheduledEvent.htmlLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-700 hover:underline"
+                  >
+                    View event in Google Calendar
+                  </a>
+                )}
+                {scheduledEvent.hangoutLink && (
+                  <a
+                    href={scheduledEvent.hangoutLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-indigo-700 hover:underline"
+                  >
+                    Join link
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
           {matchMutation.data && (
             <div className="mt-5 rounded-2xl bg-white/80 p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Latest result</p>
-              {renderMatchResult(matchMutation.data)}
+              {renderMatchResult(matchMutation.data, scheduleControls)}
               {renderParticipants(matchMutation.data, `user#${userId}`)}
               {matchMutation.data.notes.length > 0 && (
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">

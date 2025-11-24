@@ -236,6 +236,12 @@ Resources:
             RestApiId: !Ref MeaningfulApi
             Path: /users/{user_id}/friends/match-slot
             Method: POST
+        ScheduleSlot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/schedule-slot
+            Method: POST
         OptionsFriends:
           Type: Api
           Properties:
@@ -259,6 +265,12 @@ Resources:
           Properties:
             RestApiId: !Ref MeaningfulApi
             Path: /users/{user_id}/friends/match-slot
+            Method: OPTIONS
+        OptionsFriendsScheduleSlot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/friends/schedule-slot
             Method: OPTIONS
       Policies:
         - DynamoDBCrudPolicy:

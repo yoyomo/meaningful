@@ -91,6 +91,26 @@ export type FriendMatchRequest = {
   windowDays?: number
 }
 
+export type ScheduleSlotRequest = {
+  friendId: string
+  start: string
+  end: string
+  title?: string
+  notes?: string
+}
+
+export type ScheduleSlotResponse = {
+  status: string
+  event?: {
+    id?: string
+    summary?: string
+    htmlLink?: string
+    hangoutLink?: string
+    start?: Record<string, unknown>
+    end?: Record<string, unknown>
+  }
+}
+
 const ensureStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return []
@@ -402,6 +422,39 @@ export const useFriendMatch = (userId?: string) => {
         throw new Error(message || 'Failed to compute a matching slot')
       }
       return (await response.json()) as FriendMatchResponse
+    },
+  })
+}
+
+export const useScheduleFriendSlot = (userId?: string) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<ScheduleSlotResponse, Error, ScheduleSlotRequest>({
+    mutationFn: async (payload) => {
+      if (!userId) {
+        throw new Error('Missing user ID')
+      }
+      if (!payload.friendId || !payload.start || !payload.end) {
+        throw new Error('Missing meeting details')
+      }
+
+      const response = await fetch(`${API_URL}/users/${userId}/friends/schedule-slot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || 'Failed to schedule meeting')
+      }
+
+      return (await response.json()) as ScheduleSlotResponse
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friends-available-now', userId] })
     },
   })
 }

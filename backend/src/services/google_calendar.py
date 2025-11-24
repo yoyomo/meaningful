@@ -14,6 +14,7 @@ class GoogleCalendarService:
     """
 
     SCOPES = [
+        "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile",
@@ -57,6 +58,39 @@ class GoogleCalendarService:
         primary = calendars.get("primary", {})
         busy = primary.get("busy", [])
         return busy, refreshed_payload
+
+    def create_event(
+        self,
+        tokens: Dict[str, Any],
+        event_body: Dict[str, Any],
+        *,
+        conference_data: bool = True,
+    ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+        """
+        Create a calendar event on the primary calendar. Optionally request Meet link.
+        Returns (event_response, refreshed_tokens_if_any).
+        """
+        credentials, refreshed_payload = self._ensure_credentials(tokens)
+        service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+
+        insert_kwargs: Dict[str, Any] = {
+            "calendarId": "primary",
+            "body": event_body,
+        }
+        if conference_data:
+            insert_kwargs["conferenceDataVersion"] = 1
+
+        try:
+            event = (
+                service.events()
+                .insert(**insert_kwargs)
+                .execute()
+            )
+        except HttpError as error:
+            error_reason = getattr(error, "reason", None)
+            raise RuntimeError(f"Google Calendar API error: {error_reason or error}") from error
+
+        return event, refreshed_payload
 
     def _ensure_credentials(self, tokens: Dict[str, Any]) -> Tuple[Credentials, Optional[Dict[str, Any]]]:
         access_token = tokens.get("access_token")

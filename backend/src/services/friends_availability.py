@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import uuid4
 
 from zoneinfo import ZoneInfo
 
@@ -312,6 +313,112 @@ class FriendsAvailabilityService:
                 for slot in overlap_slots[1:]
             ]
         return result
+
+    def schedule_meeting_slot(
+        self,
+        user_id: str,
+        friend_id: str,
+        *,
+        start: str,
+        end: str,
+        title: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        try:
+            start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+        except ValueError:
+            raise ValueError("start and end must be ISO8601 timestamps")
+        if end_dt <= start_dt:
+            raise ValueError("end must be after start")
+
+        owner_record = self.dynamodb_service.get_user(user_id)
+        if not owner_record:
+            raise ValueError("Unable to load your profile")
+
+        owner_email = owner_record.get("email")
+        if not owner_email:
+            raise ValueError("Your Meaningful account is missing an email address")
+
+        owner_tokens = owner_record.get("google_tokens")
+        if not isinstance(owner_tokens, Dict):
+            raise ValueError("Connect your Google Calendar before scheduling invites")
+
+        friend = self.friends_service.get_friend(user_id, friend_id)
+        if not friend:
+            raise ValueError("Friend relationship not found")
+        if friend.get("friend_type") != "app_user" or not friend.get("linked_user_id"):
+            raise ValueError("This friend must have a Meaningful account connected")
+
+        friend_user = self.dynamodb_service.get_user(friend["linked_user_id"])
+        if not friend_user:
+            raise ValueError("Unable to load your friend's profile")
+
+        friend_email = friend_user.get("email")
+        if not friend_email:
+            raise ValueError("Friend does not have a valid email on file")
+
+        friend_name = friend.get("display_name") or friend_user.get("name") or "Friend"
+        summary = title or f"Catch up with {friend_name}"
+        description = notes or "Planned via Meaningful."
+
+        timezone_name = (
+            owner_record.get("availability", {}).get("timezone")
+            if isinstance(owner_record.get("availability"), Dict)
+            else None
+        ) or "UTC"
+        try:
+            ZoneInfo(timezone_name)
+        except Exception:
+            timezone_name = "UTC"
+
+        attendees = [
+            {"email": owner_email, "responseStatus": "accepted"},
+            {"email": friend_email},
+        ]
+
+        event_body = {
+            "summary": summary,
+            "description": description,
+            "start": {"dateTime": start_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"), "timeZone": timezone_name},
+            "end": {"dateTime": end_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"), "timeZone": timezone_name},
+            "attendees": attendees,
+            "reminders": {
+                "useDefault": False,
+                "overrides": [
+                    {"method": "email", "minutes": 24 * 60},
+                    {"method": "popup", "minutes": 10},
+                ],
+            },
+            "conferenceData": {
+                "createRequest": {
+                    "requestId": f"meaningful-{uuid4()}",
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"},
+                }
+            },
+        }
+
+        event, refreshed_tokens = self.google_calendar_service.create_event(
+            owner_tokens,
+            event_body,
+            conference_data=True,
+        )
+        if refreshed_tokens:
+            self.dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
+
+        return {
+            "status": "scheduled",
+            "event": {
+                "id": event.get("id"),
+                "summary": event.get("summary"),
+                "hangoutLink": event.get("hangoutLink") or event.get("conferenceData", {})
+                .get("entryPoints", [{}])[0]
+                .get("uri"),
+                "htmlLink": event.get("htmlLink"),
+                "start": event.get("start"),
+                "end": event.get("end"),
+            },
+        }
 
     @staticmethod
     def _find_current_slot(availability: Availability, now_local: datetime) -> Optional[Tuple[datetime, datetime]]:
