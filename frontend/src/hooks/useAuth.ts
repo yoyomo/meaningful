@@ -112,10 +112,7 @@ export const useAuth = () => {
     initialData: persistedUser,
     initialDataUpdatedAt: persistedUser ? Date.now() : undefined,
     refetchOnWindowFocus: false,
-    queryFn: () => readPersistedUser(),
-    onSuccess: (data) => {
-      setCurrentUser(data)
-    },
+    queryFn: readPersistedUser,
   })
 
   useEffect(() => {

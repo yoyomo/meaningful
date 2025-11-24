@@ -13,10 +13,6 @@ export type Friend = {
   createdAt: string
 }
 
-type FriendsResponse = {
-  friends: Friend[]
-}
-
 type AddFriendPayload =
   | {
       sourceType: 'contact'

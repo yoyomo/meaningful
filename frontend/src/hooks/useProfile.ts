@@ -9,10 +9,6 @@ export type UserProfile = {
   phoneNumber: string | null
 }
 
-type ProfileResponse = {
-  profile: UserProfile
-}
-
 type UpdateProfilePayload = {
   name?: string | null
   phoneNumber?: string | null
