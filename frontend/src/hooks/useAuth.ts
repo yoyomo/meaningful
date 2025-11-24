@@ -60,8 +60,57 @@ const readPersistedUser = (): AuthUser | null => {
   }
 }
 
+const AUTH_PENDING_KEY = 'meaningful_auth_pending'
+const AUTH_PENDING_MAX_AGE_MS = 5 * 60 * 1000
+
+const readPendingAuth = () => {
+  try {
+    const raw = sessionStorage.getItem(AUTH_PENDING_KEY)
+    if (!raw) {
+      return false
+    }
+    const payload = JSON.parse(raw) as { startedAt: number }
+    if (typeof payload.startedAt !== 'number') {
+      sessionStorage.removeItem(AUTH_PENDING_KEY)
+      return false
+    }
+    if (Date.now() - payload.startedAt > AUTH_PENDING_MAX_AGE_MS) {
+      sessionStorage.removeItem(AUTH_PENDING_KEY)
+      return false
+    }
+    return true
+  } catch {
+    sessionStorage.removeItem(AUTH_PENDING_KEY)
+    return false
+  }
+}
+
+const collectAuthParams = () => {
+  const params = new URLSearchParams(window.location.search)
+  const hash = window.location.hash || ''
+
+  const hashPayload = (() => {
+    if (!hash) return ''
+    const trimmed = hash.startsWith('#') ? hash.substring(1) : hash
+    const questionIndex = trimmed.indexOf('?')
+    if (questionIndex >= 0) {
+      return trimmed.substring(questionIndex + 1)
+    }
+    return trimmed.includes('=') ? trimmed : ''
+  })()
+
+  if (hashPayload) {
+    const hashParams = new URLSearchParams(hashPayload)
+    hashParams.forEach((value, key) => {
+      params.set(key, value)
+    })
+  }
+
+  return params
+}
+
 const readAuthStateFromUrl = (): AuthUrlState => {
-  const urlParams = new URLSearchParams(window.location.search)
+  const urlParams = collectAuthParams()
   const authResult = urlParams.get('auth')
   const userId = urlParams.get('user_id')
   const userName = urlParams.get('name')
@@ -103,6 +152,13 @@ export const useAuth = () => {
   const authUrlState = useMemo(() => readAuthStateFromUrl(), [])
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(authUrlState.user ?? persistedUser)
   const [isInitializing, setIsInitializing] = useState(authUrlState.authResult === 'success')
+  const [isRedirectingToGoogle, setIsRedirectingToGoogle] = useState(() => {
+    // Check sessionStorage (works for same-tab redirects)
+    const hasPendingFlag = readPendingAuth()
+    // Also check URL params (works for new-tab redirects)
+    const hasAuthParams = authUrlState.authResult !== null || authUrlState.error !== null
+    return hasPendingFlag || hasAuthParams
+  })
 
   const userQuery = useQuery<AuthUser | null>({
     queryKey: ['user'],
@@ -116,6 +172,11 @@ export const useAuth = () => {
   })
 
   useEffect(() => {
+    // If we see auth params in URL, we're processing a callback (works for new-tab redirects)
+    if (authUrlState.authResult !== null || authUrlState.error !== null) {
+      setIsRedirectingToGoogle(true)
+    }
+
     if (authUrlState.authResult === 'success' && authUrlState.user) {
       const userData = authUrlState.user
       setCurrentUser(userData)
@@ -127,16 +188,26 @@ export const useAuth = () => {
       setError('')
       void queryClient.invalidateQueries({ queryKey: ['user'] })
       setIsInitializing(false)
+      sessionStorage.removeItem(AUTH_PENDING_KEY)
+      setIsRedirectingToGoogle(false)
     } else if (authUrlState.authResult === 'error' && authUrlState.error) {
       setError(`Authentication failed: ${authUrlState.error}`)
       setIsInitializing(false)
+      sessionStorage.removeItem(AUTH_PENDING_KEY)
+      setIsRedirectingToGoogle(false)
     } else if (!isInitializing) {
       // No auth params present; ensure initialization flag cleared
       setIsInitializing(false)
     }
 
     if (authUrlState.authResult || authUrlState.error) {
-      window.history.replaceState({}, document.title, '/')
+      const cleanedHash = (() => {
+        const currentHash = window.location.hash || ''
+        const questionIndex = currentHash.indexOf('?')
+        return questionIndex === -1 ? currentHash : currentHash.substring(0, questionIndex)
+      })()
+      const nextUrl = `${window.location.pathname}${cleanedHash}` || '/'
+      window.history.replaceState({}, document.title, nextUrl)
     }
   }, [authUrlState, isInitializing, queryClient])
 
@@ -170,6 +241,8 @@ export const useAuth = () => {
     },
     onMutate: () => {
       setError('')
+      sessionStorage.setItem(AUTH_PENDING_KEY, JSON.stringify({ startedAt: Date.now() }))
+      setIsRedirectingToGoogle(true)
     },
     onSuccess: (data) => {
       if (data?.auth_url) {
@@ -181,6 +254,8 @@ export const useAuth = () => {
     },
     onError: () => {
       setError('Failed to initiate Google sign-in')
+      sessionStorage.removeItem(AUTH_PENDING_KEY)
+      setIsRedirectingToGoogle(false)
     },
   })
 
@@ -195,7 +270,7 @@ export const useAuth = () => {
     user: currentUser,
     isUserLoading: isInitializing || userQuery.isLoading,
     signIn,
-    isSigningIn,
+    isSigningIn: isSigningIn || isRedirectingToGoogle,
     error,
     signOut: handleSignOut,
   }
