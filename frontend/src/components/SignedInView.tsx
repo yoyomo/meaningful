@@ -25,7 +25,7 @@ type PageState = 'home' | 'availability' | 'loading'
 const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
   const {
     data: availability,
-    isLoading,
+    isFetching,
   } = useAvailability(user.id)
   const [activePage, setActivePage] = useState<PageState>('loading')
 
@@ -42,14 +42,14 @@ const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
   }, [availability])
 
   useEffect(() => {
-    if (isLoading) {
+    if (isFetching) {
       setActivePage('loading')
     } else if (hasSavedAvailability) {
       setActivePage('home')
     } else {
       setActivePage('availability')
     }
-  }, [isLoading, hasSavedAvailability])
+  }, [isFetching, hasSavedAvailability])
 
   if (activePage === 'loading') {
     return (
@@ -77,7 +77,7 @@ const SignedInView = ({ user, onSignOut, invitation }: SignedInViewProps) => {
       user={user}
       invitation={invitation}
       availability={availability}
-      isAvailabilityLoading={isLoading}
+      isAvailabilityLoading={isFetching}
       onEditAvailability={() => setActivePage('availability')}
       onSignOut={onSignOut}
     />
