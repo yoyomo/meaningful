@@ -1,4 +1,8 @@
-.PHONY: help setup install clean dev-frontend dev-backend dev build-frontend build-backend deploy test lint format check-deps
+.PHONY: help setup install install-tools clean dev-frontend dev-backend dev build-frontend build-backend deploy test lint format check-deps
+
+BREW ?= brew
+NVM_DIR ?= $(HOME)/.nvm
+NODE_VERSION ?= $(shell cat .nvmrc 2>/dev/null || echo "lts/*")
 
 # Default target
 help: ## Show this help message
@@ -21,6 +25,28 @@ setup: ## Initial project setup (install all dependencies)
 	@echo "  make dev          # Start both frontend and backend"
 
 install: setup ## Alias for setup
+
+install-tools: ## Install global CLI tooling (pnpm via nvm, awscli, aws-sam-cli)
+	@echo "🛠️  Ensuring CLI tooling is installed..."
+	@if ! command -v $(BREW) >/dev/null 2>&1; then \
+		echo "❌ Homebrew is required for install-tools. Install from https://brew.sh first."; \
+		exit 1; \
+	fi
+	@echo "📦 Installing pnpm via nvm..."
+	@if [ -s "$(NVM_DIR)/nvm.sh" ]; then \
+		. "$(NVM_DIR)/nvm.sh"; \
+		nvm install $(NODE_VERSION); \
+		nvm use $(NODE_VERSION); \
+		npm install -g pnpm; \
+	else \
+		echo "❌ NVM not found in $(NVM_DIR). Install nvm first: https://github.com/nvm-sh/nvm#installing-and-updating"; \
+		exit 1; \
+	fi
+	@echo "☁️  Installing AWS CLI..."
+	@$(BREW) install awscli || true
+	@echo "🧰 Installing AWS SAM CLI..."
+	@$(BREW) install aws-sam-cli || true
+	@echo "✅ CLI tooling ready!"
 
 # Development
 dev: ## Start both frontend and backend in development mode
