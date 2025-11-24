@@ -21,7 +21,10 @@ type DaySlotEditorProps = {
   onCopyForward: () => void
 }
 
+<<<<<<< HEAD
 const EMPTY_SLOT: TimeRange = { start: '', end: '' }
+=======
+>>>>>>> 700ad1848d828870a08e4b78f3058a7e190b7ee6
 
 export const DaySlotEditor = ({
   day,
