@@ -1,9 +1,11 @@
 import os
+import re
 from typing import Dict, Any
 from datetime import datetime, timezone
 from utils.http_responses import create_json_response, create_error_response, create_cors_headers
 from services.google_calendar import GoogleCalendarService
 from services.database import DynamoDBService
+from services.friends import FriendsService
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -82,6 +84,62 @@ def handle_get_events(event: Dict[str, Any], context: Any, user_id: str = None) 
         if refreshed_tokens:
             dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
         
+        # Get user's friends to match attendees
+        friends_service = FriendsService()
+        friends = friends_service.list_friends(user_id)
+        
+        # Build a map of email -> friend info for quick lookup
+        email_to_friend = {}
+        for friend in friends:
+            emails = friend.get("emails", [])
+            for email in emails:
+                if isinstance(email, str) and email.strip():
+                    email_to_friend[email.strip().lower()] = friend
+        
+        # Helper to check if a string looks like a phone number
+        def is_phone_number(text: str) -> bool:
+            if not text or not isinstance(text, str):
+                return False
+            # Check if it starts with + or contains phone-like patterns
+            text_clean = text.strip()
+            if text_clean.startswith("+"):
+                return True
+            # Check for patterns like "34 637-213-975" or similar
+            phone_pattern = r'[\d\s\-\(\)]{10,}'
+            if re.search(phone_pattern, text_clean):
+                return True
+            return False
+        
+        # Helper to get friend name from attendees
+        def get_friend_name_from_attendees(attendees: list, user_email: str) -> str:
+            user_email_lower = user_email.lower() if user_email else ""
+            for att in attendees:
+                att_email = att.get("email", "").lower()
+                if att_email and att_email != user_email_lower:
+                    friend = email_to_friend.get(att_email)
+                    if friend:
+                        # Prefer display_name, then name from linked user, then email
+                        display_name = friend.get("display_name")
+                        if display_name and isinstance(display_name, str) and display_name.strip():
+                            # Don't use phone numbers as display names
+                            if not is_phone_number(display_name):
+                                return display_name.strip()
+                        # Try to get name from linked user
+                        linked_user_id = friend.get("linked_user_id")
+                        if linked_user_id:
+                            linked_user = dynamodb_service.get_user(linked_user_id)
+                            if linked_user:
+                                name = linked_user.get("name")
+                                if name and isinstance(name, str) and name.strip() and not is_phone_number(name):
+                                    return name.strip()
+                        # Fallback to email
+                        if att_email:
+                            return att_email.split("@")[0]
+            return None
+        
+        # Get user's email for filtering
+        user_email = user.get("email", "")
+        
         # Filter for events created by Meaningful app only
         # Format events for frontend
         formatted_events = []
@@ -108,9 +166,24 @@ def handle_get_events(event: Dict[str, Any], context: Any, user_id: str = None) 
             start = event.get("start", {})
             end = event.get("end", {})
             
+            # Get event summary and fix it if it contains a phone number
+            event_summary = event.get("summary", "Untitled Event")
+            if is_phone_number(event_summary):
+                # Try to get friend name from attendees
+                friend_name = get_friend_name_from_attendees(attendees, user_email)
+                if friend_name:
+                    event_summary = f"Catch up with {friend_name}"
+                else:
+                    # Fallback: use first attendee's email
+                    for att in attendees:
+                        att_email = att.get("email", "")
+                        if att_email and att_email.lower() != user_email.lower():
+                            event_summary = f"Catch up with {att_email.split('@')[0]}"
+                            break
+            
             formatted_events.append({
                 "id": event.get("id"),
-                "summary": event.get("summary", "Untitled Event"),
+                "summary": event_summary,
                 "start": start.get("dateTime") or start.get("date"),
                 "end": end.get("dateTime") or end.get("date"),
                 "htmlLink": event.get("htmlLink"),

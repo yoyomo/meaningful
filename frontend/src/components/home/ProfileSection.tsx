@@ -19,12 +19,16 @@ export const ProfileSection = ({ userId }: ProfileSectionProps) => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Update phone draft when profile data loads or changes
     if (profileQuery.data) {
-      // Update phone draft when profile data loads or changes
       const phone = profileQuery.data.phoneNumber
-      setPhoneDraft(phone && typeof phone === 'string' ? phone : '')
+      // Handle null, undefined, or empty string - set to empty string for display
+      setPhoneDraft(phone && typeof phone === 'string' && phone.trim() ? phone.trim() : '')
+    } else if (!profileQuery.isLoading && !profileQuery.isError) {
+      // If data is not available and not loading/error, reset to empty
+      setPhoneDraft('')
     }
-  }, [profileQuery.data])
+  }, [profileQuery.data, profileQuery.isLoading, profileQuery.isError])
 
   useEffect(() => {
     if (!success && !error) return
@@ -36,8 +40,9 @@ export const ProfileSection = ({ userId }: ProfileSectionProps) => {
   }, [success, error])
 
   const phoneDraftNormalized = phoneDraft.trim()
-  const profilePhone = profileQuery.data?.phoneNumber ?? ''
-  const isDirty = phoneDraftNormalized !== (profilePhone ?? '')
+  const profilePhone = profileQuery.data?.phoneNumber
+  const profilePhoneNormalized = profilePhone && typeof profilePhone === 'string' ? profilePhone.trim() : ''
+  const isDirty = phoneDraftNormalized !== profilePhoneNormalized
 
   const handleSave = async () => {
     setSuccess(null)
@@ -93,7 +98,7 @@ export const ProfileSection = ({ userId }: ProfileSectionProps) => {
               </Button>
               <button
                 type="button"
-                onClick={() => setPhoneDraft(profilePhone ?? '')}
+                onClick={() => setPhoneDraft(profilePhoneNormalized)}
                 className="text-sm font-medium text-slate-500 hover:text-slate-900"
               >
                 Reset

@@ -118,7 +118,7 @@ class FriendsService:
     def _resolve_contact_display_name(contact: Dict[str, Any]) -> str:
         names = FriendsService._ensure_string_list(contact.get("names"))
         emails = FriendsService._ensure_string_list(contact.get("emails"))
-        phones = FriendsService._ensure_string_list(contact.get("phones"))
+        # Don't use phone numbers as display names - prioritize name, then email
 
         for name in names:
             if name.strip():
@@ -128,20 +128,17 @@ class FriendsService:
             if email.strip():
                 return email.strip()
 
-        for phone in phones:
-            if phone.strip():
-                return phone.strip()
-
+        # Don't fall back to phone - use generic name
         return "Unnamed friend"
 
     @staticmethod
     def _resolve_app_user_display_name(app_user: Dict[str, Any]) -> str:
+        # Prioritize name, then email - never use phone number as display name
         if isinstance(app_user.get("name"), str) and app_user["name"].strip():
             return app_user["name"].strip()
         if isinstance(app_user.get("email"), str) and app_user["email"].strip():
             return app_user["email"].strip()
-        if isinstance(app_user.get("phone_number"), str) and app_user["phone_number"].strip():
-            return app_user["phone_number"].strip()
+        # Don't use phone number - use a generic name instead
         return "Meaningful member"
 
     @staticmethod
