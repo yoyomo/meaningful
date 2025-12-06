@@ -25,6 +25,16 @@ class GoogleOAuthService:
         self.redirect_uri = f"{API_URL}/auth/callback"
         self.frontend_url = FRONTEND_URL
         
+        # Validate required credentials
+        if not self.client_id:
+            log_error("GOOGLE_CLIENT_ID is not set")
+        if not self.client_secret:
+            log_error("GOOGLE_CLIENT_SECRET is not set")
+        if not self.client_id or not self.client_secret:
+            raise ValueError("Google OAuth credentials are missing. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.")
+        
+        log_success(f"OAuth redirect URI: {self.redirect_uri}")
+        
         # DynamoDB - use local DynamoDB if endpoint is configured
         dynamodb_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
         if dynamodb_endpoint:
@@ -190,10 +200,14 @@ class GoogleOAuthService:
             }
             
         except Exception as e:
-            log_error(f"OAuth callback error: {e}")
+            error_msg = str(e)
+            error_type = type(e).__name__
+            log_error(f"OAuth callback error: ({error_type}) {error_msg}")
+            log_error(f"Using redirect_uri: {self.redirect_uri}")
+            log_error(f"Client ID: {self.client_id[:20]}..." if self.client_id else "Client ID: NOT SET")
             return {
                 'success': False,
-                'error': str(e)
+                'error': error_msg
             }
     
     def _get_user_phone_number(self, access_token: str) -> Optional[str]:
