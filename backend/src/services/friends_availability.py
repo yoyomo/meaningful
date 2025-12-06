@@ -350,10 +350,15 @@ class FriendsAvailabilityService:
             )
         
         # Verify we have the required token fields
-        if not owner_tokens.get("refresh_token"):
+        refresh_token = owner_tokens.get("refresh_token")
+        if not refresh_token:
+            # Log for debugging
+            import logging
+            logging.error(f"User {user_id} missing refresh_token. Token keys: {list(owner_tokens.keys())}")
             raise ValueError(
                 "Google Calendar connection is incomplete (missing refresh token). "
-                "Please sign out completely, then sign back in with Google and grant all permissions."
+                "Please sign out completely, then sign back in with Google and grant all permissions. "
+                "You may need to revoke access at https://myaccount.google.com/permissions first."
             )
 
         friend = self.friends_service.get_friend(user_id, friend_id)
@@ -366,9 +371,25 @@ class FriendsAvailabilityService:
         if not friend_user:
             raise ValueError("Unable to load your friend's profile")
 
+        # Get friend's email - should be saved during OAuth sign-in
         friend_email = friend_user.get("email")
-        if not friend_email:
-            raise ValueError("Friend does not have a valid email on file")
+        
+        # Debug: log what we found
+        if not friend_email or not isinstance(friend_email, str) or not friend_email.strip():
+            # Log available fields for debugging
+            available_fields = list(friend_user.keys())
+            import logging
+            logging.warning(
+                f"Friend user {friend['linked_user_id']} missing email. "
+                f"Available fields: {available_fields}. "
+                f"Email value: {friend_email}"
+            )
+            raise ValueError(
+                f"Friend does not have a valid email on file. "
+                f"Please ask your friend to sign out and sign back in to update their profile."
+            )
+        
+        friend_email = friend_email.strip()
 
         friend_name = friend.get("display_name") or friend_user.get("name") or "Friend"
         summary = title or f"Catch up with {friend_name}"

@@ -5,7 +5,7 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 import requests as http_requests
 from utils.env import *  # Load environment variables
 
@@ -65,9 +65,13 @@ class GoogleOAuthService:
             'https://www.googleapis.com/auth/contacts.readonly',
         ]
     
-    def get_authorization_url(self) -> str:
+    def get_authorization_url(self, user_id: Optional[str] = None, force_consent: bool = False) -> tuple[str, str]:
         """
         Generate Google OAuth authorization URL
+        
+        Args:
+            user_id: Optional user ID (for logging)
+            force_consent: If True, force consent screen
         """
         flow = Flow.from_client_config(
             {
@@ -83,10 +87,17 @@ class GoogleOAuthService:
         )
         flow.redirect_uri = self.redirect_uri
         
-        authorization_url, state = flow.authorization_url(
-            access_type='offline',  # For refresh tokens
-            include_granted_scopes='true'
-        )
+        # Build authorization URL parameters
+        auth_params = {
+            'access_type': 'offline',  # For refresh tokens
+            'include_granted_scopes': 'true',
+        }
+        
+        # Only force consent if explicitly requested (e.g., when user needs to re-auth)
+        if force_consent:
+            auth_params['prompt'] = 'consent'
+        
+        authorization_url, state = flow.authorization_url(**auth_params)
         
         return authorization_url, state
     
@@ -114,6 +125,15 @@ class GoogleOAuthService:
             flow.fetch_token(code=code)
             credentials = flow.credentials
             
+            # Log token info for debugging
+            has_refresh = bool(credentials.refresh_token)
+            log_success(f"OAuth callback: received tokens - has refresh_token: {has_refresh}")
+            if has_refresh:
+                log_success(f"Refresh token received: {credentials.refresh_token[:30]}...")
+            else:
+                log_error("CRITICAL: No refresh token received from Google even with prompt='select_account consent'")
+                log_error("User may need to revoke access at https://myaccount.google.com/permissions and try again")
+            
             # Verify and decode ID token
             id_info = id_token.verify_oauth2_token(
                 credentials.id_token, 
@@ -125,6 +145,72 @@ class GoogleOAuthService:
             phone_number = self._get_user_phone_number(credentials.token)
             
             # Extract user information
+            user_id = id_info['sub']
+            
+            # Get refresh token - check new credentials first, then existing database record
+            refresh_token = credentials.refresh_token
+            
+            # IMPORTANT: Google OAuth quirk - refresh_token might be None even with prompt='consent'
+            # if the user has already granted access. We need to check the raw token response.
+            if not refresh_token:
+                # Try to get it from the raw token response (Google sometimes puts it there)
+                try:
+                    # The Flow object might have the raw response
+                    if hasattr(flow, 'credentials') and hasattr(flow.credentials, 'refresh_token'):
+                        refresh_token = flow.credentials.refresh_token
+                except:
+                    pass
+            
+            log_success(f"OAuth callback for user {user_id}: received refresh_token = {bool(refresh_token)}")
+            
+            if not refresh_token:
+                log_error(f"No refresh token in new credentials for user {user_id}, checking existing user record...")
+                try:
+                    existing_user = self.users_table.get_item(Key={'id': user_id})
+                    if 'Item' in existing_user:
+                        existing_tokens = existing_user['Item'].get('google_tokens', {})
+                        existing_refresh = existing_tokens.get('refresh_token')
+                        if existing_refresh:
+                            refresh_token = existing_refresh
+                            log_success(f"Using existing refresh token from database for user {user_id}")
+                        else:
+                            log_error(f"User {user_id} has no refresh token in database either")
+                            log_error(f"Google OAuth app may be in 'Testing' mode - refresh tokens only work for test users")
+                            log_error(f"Or user needs to revoke access at https://myaccount.google.com/permissions")
+                except Exception as e:
+                    log_error(f"Error checking existing user {user_id}: {e}")
+            
+            # Log final state
+            if refresh_token:
+                log_success(f"User {user_id} will have refresh_token saved: {refresh_token[:20]}...")
+            else:
+                log_error(f"CRITICAL: User {user_id} has NO refresh token - calendar features will not work!")
+                log_error(f"This usually means:")
+                log_error(f"  1. OAuth app is in 'Testing' mode (only test users get refresh tokens)")
+                log_error(f"  2. User needs to revoke access and re-authenticate")
+                log_error(f"  3. OAuth app configuration issue")
+            
+            # Build google_tokens - only include refresh_token if we have one
+            # Ensure expires_at is always saved with timezone info (UTC)
+            expires_at_str = None
+            if credentials.expiry:
+                # Always convert to UTC and ensure timezone-aware
+                expiry = credentials.expiry
+                if expiry.tzinfo is None:
+                    expiry_utc = expiry.replace(tzinfo=timezone.utc)
+                else:
+                    expiry_utc = expiry.astimezone(timezone.utc)
+                expires_at_str = expiry_utc.isoformat()
+            
+            google_tokens = {
+                'access_token': credentials.token,
+                'token_uri': credentials.token_uri,
+                'expires_at': expires_at_str
+            }
+            # Only add refresh_token if we have one (don't save None)
+            if refresh_token:
+                google_tokens['refresh_token'] = refresh_token
+            
             user_data = {
                 'id': id_info['sub'],  # Google user ID
                 'email': id_info['email'],
@@ -133,18 +219,13 @@ class GoogleOAuthService:
                 'phone_number': phone_number,
                 'created_at': datetime.utcnow().isoformat(),
                 'updated_at': datetime.utcnow().isoformat(),
-                'google_tokens': {
-                    'access_token': credentials.token,
-                    'refresh_token': credentials.refresh_token,
-                    'token_uri': credentials.token_uri,
-                    'expires_at': credentials.expiry.isoformat() if credentials.expiry else None
-                }
+                'google_tokens': google_tokens
             }
             
             # Store or update user in DynamoDB without losing existing fields (e.g., availability)
             try:
                 update_expression_parts = [
-                    "SET #email = :email",
+                    "#email = :email",
                     "#name = :name",
                     "picture = :picture",
                     "google_tokens = :google_tokens",
@@ -188,6 +269,9 @@ class GoogleOAuthService:
                 error_msg = str(db_error)
                 log_error(f"DynamoDB write failed (OAuth succeeded, user authenticated): {error_type}: {error_msg}")
             
+            # Check if we have a refresh token - if not, user needs to re-authenticate
+            has_refresh_token = bool(user_data['google_tokens'].get('refresh_token'))
+            
             return {
                 'success': True,
                 'user': {
@@ -196,7 +280,9 @@ class GoogleOAuthService:
                     'name': user_data['name'],
                     'picture': user_data['picture'],
                     'phone_number': user_data['phone_number']
-                }
+                },
+                'needs_reauth': not has_refresh_token,  # Frontend can use this to trigger re-auth
+                'has_refresh_token': has_refresh_token
             }
             
         except Exception as e:

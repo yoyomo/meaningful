@@ -1,11 +1,13 @@
 import json
 from typing import Any, Dict, Optional
+import traceback
 
 from botocore.exceptions import ClientError
 
 from services.friends import FriendsService
 from services.friends_availability import FriendsAvailabilityService
 from utils.http_responses import create_cors_headers, create_error_response, create_json_response
+from utils.logs import log_error, log_success
 
 friends_service = FriendsService()
 availability_service = FriendsAvailabilityService()
@@ -143,9 +145,14 @@ def _handle_match_slot(user_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
             window_days=window_days,
         )
     except ValueError as exc:
+        log_error(f"Match slot validation error for user {user_id}: {exc}")
         return create_error_response(400, str(exc))
     except Exception as exc:
-        return create_error_response(500, "Failed to compute a matching slot", str(exc))
+        error_msg = str(exc)
+        error_trace = traceback.format_exc()
+        log_error(f"Match slot error for user {user_id}: {error_msg}")
+        log_error(f"Traceback: {error_trace}")
+        return create_error_response(500, "Failed to compute a matching slot", error_msg)
 
     return create_json_response(200, match)
 

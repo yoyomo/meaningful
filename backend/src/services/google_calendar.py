@@ -99,8 +99,30 @@ class GoogleCalendarService:
         expires_at = tokens.get("expires_at")
 
         if not refresh_token:
-            raise RuntimeError("Missing Google refresh token for calendar access")
+            raise ValueError(
+                "Google Calendar connection is incomplete (missing refresh token). "
+                "Please sign out and sign back in - you'll be asked to grant calendar permissions again."
+            )
 
+        # Parse and normalize expiry BEFORE creating Credentials object
+        expiry_dt = None
+        if isinstance(expires_at, str):
+            expiry_dt = self._parse_expiry(expires_at)
+        elif isinstance(expires_at, datetime):
+            expiry_dt = expires_at
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+            else:
+                expiry_dt = expiry_dt.astimezone(timezone.utc)
+        
+        # CRITICAL: Ensure expiry is ALWAYS timezone-aware UTC
+        if expiry_dt is not None:
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+            else:
+                expiry_dt = expiry_dt.astimezone(timezone.utc)
+
+        # Create credentials without expiry first (some versions don't accept it in constructor)
         credentials = Credentials(
             token=access_token,
             refresh_token=refresh_token,
@@ -109,12 +131,59 @@ class GoogleCalendarService:
             client_secret=self.client_secret,
             scopes=self.SCOPES,
         )
+        
+        # Set expiry AFTER creation and ensure it's timezone-aware UTC
+        if expiry_dt is not None:
+            # Double-check it's timezone-aware before setting
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+            else:
+                expiry_dt = expiry_dt.astimezone(timezone.utc)
+            credentials.expiry = expiry_dt
+        
+        # Defensive check: ensure expiry is still timezone-aware after setting
+        if credentials.expiry is not None:
+            if credentials.expiry.tzinfo is None:
+                credentials.expiry = credentials.expiry.replace(tzinfo=timezone.utc)
+            else:
+                credentials.expiry = credentials.expiry.astimezone(timezone.utc)
 
-        if isinstance(expires_at, str):
-            credentials.expiry = self._parse_expiry(expires_at)
-
+        # CRITICAL: Right before checking valid, ensure expiry is timezone-aware UTC
+        # The Google library might have modified it or it might not have been set correctly
+        if credentials.expiry is not None:
+            if credentials.expiry.tzinfo is None:
+                credentials.expiry = credentials.expiry.replace(tzinfo=timezone.utc)
+            else:
+                credentials.expiry = credentials.expiry.astimezone(timezone.utc)
+        
         refreshed_payload: Optional[Dict[str, Any]] = None
-        if not credentials.valid:
+        
+        # CRITICAL: Check validity with defensive timezone handling
+        # If we can't check validity due to timezone issues, assume invalid and refresh
+        is_valid = False
+        try:
+            # Ensure expiry is timezone-aware before checking
+            if credentials.expiry is not None:
+                if credentials.expiry.tzinfo is None:
+                    credentials.expiry = credentials.expiry.replace(tzinfo=timezone.utc)
+                else:
+                    credentials.expiry = credentials.expiry.astimezone(timezone.utc)
+            
+            is_valid = credentials.valid
+        except TypeError as e:
+            error_msg = str(e)
+            if "offset-naive" in error_msg or "offset-aware" in error_msg:
+                # Timezone issue - can't check validity safely
+                # Best approach: assume invalid and refresh (refresh will get new timezone-aware expiry)
+                # Log the issue for debugging
+                import logging
+                logging.warning(f"Timezone issue checking credentials validity. Expiry: {credentials.expiry}, tzinfo: {credentials.expiry.tzinfo if credentials.expiry else None}. Will refresh token.")
+                is_valid = False  # Assume invalid, will refresh
+            else:
+                # Different TypeError, re-raise
+                raise
+        
+        if not is_valid:
             credentials.refresh(GoogleAuthRequest())
             refreshed_payload = {
                 "access_token": credentials.token,
@@ -131,8 +200,16 @@ class GoogleCalendarService:
 
     @staticmethod
     def _parse_expiry(value: str) -> datetime:
+        """Parse ISO format datetime string and ensure it's timezone-aware (UTC)"""
         if value.endswith("Z"):
             value = value.replace("Z", "+00:00")
-        return datetime.fromisoformat(value).astimezone(timezone.utc)
+        parsed = datetime.fromisoformat(value)
+        # Ensure timezone-aware - if naive, assume UTC
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        else:
+            # Convert to UTC if it has timezone info
+            parsed = parsed.astimezone(timezone.utc)
+        return parsed
 
 

@@ -109,13 +109,14 @@ const collectAuthParams = () => {
   return params
 }
 
-const readAuthStateFromUrl = (): AuthUrlState => {
+const readAuthStateFromUrl = (): AuthUrlState & { needsReauth?: boolean } => {
   const urlParams = collectAuthParams()
   const authResult = urlParams.get('auth')
   const userId = urlParams.get('user_id')
   const userName = urlParams.get('name')
   const phoneNumber = urlParams.get('phone')
   const authError = urlParams.get('error')
+  const needsReauth = urlParams.get('needs_reauth') === 'true'
 
   if (authResult === 'success' && userId) {
     return {
@@ -126,6 +127,7 @@ const readAuthStateFromUrl = (): AuthUrlState => {
         phoneNumber: phoneNumber ? decodeURIComponent(phoneNumber) : null,
       },
       error: null,
+      needsReauth,
     }
   }
 
@@ -134,6 +136,7 @@ const readAuthStateFromUrl = (): AuthUrlState => {
       authResult: 'error',
       user: null,
       error: authError,
+      needsReauth: false,
     }
   }
 
@@ -141,6 +144,7 @@ const readAuthStateFromUrl = (): AuthUrlState => {
     authResult: null,
     user: null,
     error: null,
+    needsReauth: false,
   }
 }
 
@@ -179,6 +183,17 @@ export const useAuth = () => {
 
     if (authUrlState.authResult === 'success' && authUrlState.user) {
       const userData = authUrlState.user
+      
+      // If backend indicates we need to re-authenticate (missing refresh token),
+      // show error message instead of auto-re-authenticating
+      if (authUrlState.needsReauth) {
+        setError('Calendar access needs to be re-authorized. Please sign out and sign back in.')
+        setIsInitializing(false)
+        sessionStorage.removeItem(AUTH_PENDING_KEY)
+        setIsRedirectingToGoogle(false)
+        return
+      }
+      
       setCurrentUser(userData)
       queryClient.setQueryData(['user'], userData)
       localStorage.setItem(
@@ -229,9 +244,18 @@ export const useAuth = () => {
   const {
     mutate: signIn,
     isPending: isSigningIn,
-  } = useMutation<GoogleAuthResponse, Error>({
-    mutationFn: async () => {
-      const response = await fetch(`${API_URL}/auth/google`, {
+  } = useMutation<GoogleAuthResponse, Error, boolean | void>({
+    mutationFn: async (forceConsent) => {
+      const url = new URL(`${API_URL}/auth/google`)
+      if (forceConsent) {
+        url.searchParams.set('force_consent', 'true')
+      }
+      // If we have a current user, pass their ID so backend can check for refresh token
+      if (currentUser?.id) {
+        url.searchParams.set('user_id', currentUser.id)
+      }
+      
+      const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

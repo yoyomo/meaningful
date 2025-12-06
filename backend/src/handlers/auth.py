@@ -38,8 +38,15 @@ def handle_google_auth_initiate(event: Dict[str, Any], context: Any) -> Dict[str
     Initiate Google OAuth flow - returns authorization URL
     """
     try:
+        query_params = event.get('queryStringParameters', {}) or {}
+        user_id = query_params.get('user_id')  # Optional: check if user exists and needs consent
+        force_consent = query_params.get('force_consent', 'false').lower() == 'true'
+        
         oauth_service = GoogleOAuthService()
-        auth_url, state = oauth_service.get_authorization_url()
+        auth_url, state = oauth_service.get_authorization_url(
+            user_id=user_id,
+            force_consent=force_consent
+        )
         
         return create_json_response(200, {
             'auth_url': auth_url,
@@ -75,8 +82,13 @@ def handle_google_auth_callback(event: Dict[str, Any], context: Any) -> Dict[str
             name_param = quote(user.get('name', ''))
             phone_number = user.get('phone_number')
             phone_param = f"&phone={quote(phone_number)}" if phone_number else ""
+            
+            # Check if user needs to re-authenticate (missing refresh token)
+            needs_reauth = result.get('needs_reauth', False)
+            reauth_param = "&needs_reauth=true" if needs_reauth else ""
+            
             return create_redirect_response(
-                f"{FRONTEND_URL}?auth=success&user_id={user['id']}&name={name_param}{phone_param}"
+                f"{FRONTEND_URL}?auth=success&user_id={user['id']}&name={name_param}{phone_param}{reauth_param}"
             )
         else:
             # Redirect back with error
