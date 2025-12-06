@@ -250,6 +250,8 @@ export const useAddFriend = (userId?: string) => {
         return [friend, ...existing]
       })
       queryClient.invalidateQueries({ queryKey: ['friends', userId] })
+      // Automatically refetch available friends when friends list changes
+      queryClient.invalidateQueries({ queryKey: ['friends-available-now', userId] })
     },
   })
 }
@@ -288,6 +290,8 @@ export const useRemoveFriend = (userId?: string) => {
         return existing.filter((friend) => friend.friendId !== friendId)
       })
       queryClient.invalidateQueries({ queryKey: ['friends', userId] })
+      // Automatically refetch available friends when friends list changes
+      queryClient.invalidateQueries({ queryKey: ['friends-available-now', userId] })
     },
   })
 }
