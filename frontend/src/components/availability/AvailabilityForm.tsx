@@ -22,7 +22,6 @@ type AvailabilityFormProps = {
   availability: Availability
   isLoading: boolean
   isSaving: boolean
-  isRefetching: boolean
   saveError: string | null
   wasJustSaved: boolean
   onSave: (availability: Availability) => Promise<Availability>
@@ -32,7 +31,6 @@ export const AvailabilityForm = ({
   availability,
   isLoading,
   isSaving,
-  isRefetching,
   saveError,
   wasJustSaved,
   onSave,
@@ -61,6 +59,14 @@ export const AvailabilityForm = ({
   const validationError = useMemo(() => {
     for (const day of DAY_KEYS) {
       for (const slot of localAvailability.weekly[day]) {
+        // Skip validation for empty slots (they'll be filtered out on save)
+        if (!slot.start && !slot.end) {
+          continue
+        }
+        // If one is filled but not the other, that's an error
+        if (!slot.start || !slot.end) {
+          return 'Please enter both a start and end time for every slot.'
+        }
         if (!TIME_PATTERN.test(slot.start) || !TIME_PATTERN.test(slot.end)) {
           return 'Please enter both a start and end time for every slot.'
         }
@@ -156,10 +162,25 @@ export const AvailabilityForm = ({
       return
     }
 
+    if (!isDirty) {
+      return
+    }
+
+    // Filter out empty slots before saving
+    const cleanedAvailability: Availability = {
+      ...localAvailability,
+      weekly: Object.fromEntries(
+        DAY_KEYS.map((day) => [
+          day,
+          localAvailability.weekly[day].filter((slot) => slot.start && slot.end),
+        ]),
+      ) as Availability['weekly'],
+    }
+
     try {
-      await onSave(localAvailability)
+      await onSave(cleanedAvailability)
       setFormError(null)
-    } catch {
+    } catch (error) {
       // error surfaced via saveError
     }
   }
@@ -220,7 +241,6 @@ export const AvailabilityForm = ({
               ? 'All week has availability set.'
               : `${unavailableDaysCount} day${unavailableDaysCount === 1 ? '' : 's'} marked unavailable.`}
           </p>
-          {isRefetching && <StatusMessage type="info" message="Refreshing availability…" className="text-xs" />}
           {combinedError && <StatusMessage type="error" message={combinedError} className="text-xs" />}
           {successVisible && <StatusMessage type="success" message="Availability saved!" className="text-xs" />}
         </div>

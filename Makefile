@@ -60,7 +60,18 @@ dev-frontend: ## Start frontend development server
 dev-backend: ## Start backend API locally with SAM (Docker Compose network)
 	@echo "🐍 Starting backend API locally..."
 	@$(MAKE) db-local
-	@cd backend && sam build --cached && sam local start-api --docker-network meaningful-dev --port 3001 --env-vars env.json
+	@echo "🔨 Building SAM application..."
+	@cd backend && sam build
+	@echo "🔍 Checking Docker file sharing..."
+	@cd backend && docker run --rm -v "$$(pwd)/.aws-sam/build:/test:ro" alpine ls /test > /dev/null 2>&1 || (echo "⚠️  Docker file sharing issue detected. Attempting fix..." && docker system prune -f > /dev/null 2>&1 && sleep 2 && docker run --rm -v "$$(pwd)/.aws-sam/build:/test:ro" alpine ls /test > /dev/null 2>&1 || (echo "❌ Docker file sharing still broken. Please restart Docker Desktop:" && echo "   1. Quit Docker Desktop completely" && echo "   2. Restart Docker Desktop" && echo "   3. Run 'make dev-backend' again" && exit 1))
+	@echo "✅ Docker file sharing OK"
+	@echo "🚀 Starting SAM local API..."
+	@cd backend && sam local start-api --port 3001 --env-vars env.json --warm-containers EAGER --skip-pull-image
+
+fix-docker-mounts: ## Fix Docker file sharing issues (alternative to restarting Docker)
+	@echo "🔧 Attempting to fix Docker file sharing..."
+	@docker system prune -f > /dev/null 2>&1
+	@echo "✅ Docker cleanup complete. If issues persist, restart Docker Desktop."
 
 # Build
 build: build-frontend build-backend ## Build both frontend and backend

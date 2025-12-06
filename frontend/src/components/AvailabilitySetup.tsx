@@ -14,7 +14,6 @@ const AvailabilitySetup = ({ user, onSignOut, onBack }: AvailabilitySetupProps) 
   const {
     data: availability,
     isLoading,
-    isRefetching,
     isSaving,
     saveAvailability,
     saveError,
@@ -42,7 +41,6 @@ const AvailabilitySetup = ({ user, onSignOut, onBack }: AvailabilitySetupProps) 
           availability={availability}
           isLoading={isLoading}
           isSaving={isSaving}
-          isRefetching={isRefetching}
           saveError={saveError}
           wasJustSaved={wasJustSaved}
           onSave={saveAvailability}

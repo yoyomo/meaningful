@@ -231,13 +231,24 @@ export const useAuth = () => {
     isPending: isSigningIn,
   } = useMutation<GoogleAuthResponse, Error>({
     mutationFn: async () => {
-      const response = await fetch(`${API_URL}/auth/google`)
+      const response = await fetch(`${API_URL}/auth/google`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      })
 
       if (!response.ok) {
-        throw new Error('Failed to get authentication URL')
+        const errorText = await response.text().catch(() => 'Unknown error')
+        console.error('Auth endpoint error:', response.status, errorText)
+        throw new Error(`Failed to get authentication URL: ${response.status} ${errorText}`)
       }
 
-      return response.json()
+      const data = await response.json()
+      if (!data?.auth_url) {
+        throw new Error('Invalid response from auth endpoint')
+      }
+      return data
     },
     onMutate: () => {
       setError('')

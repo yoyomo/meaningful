@@ -17,6 +17,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     http_method = event.get('httpMethod', '')
     path = event.get('path', '')
     
+    # Handle CORS preflight
+    if http_method == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': create_cors_headers(),
+            'body': ''
+        }
+    
     if path == '/auth/google' and http_method == 'GET':
         return handle_google_auth_initiate(event, context)
     elif path == '/auth/callback' and http_method == 'GET':
