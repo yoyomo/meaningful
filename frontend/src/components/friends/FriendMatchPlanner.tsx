@@ -158,7 +158,7 @@ export const FriendMatchPlanner = ({ userId, friends }: FriendMatchPlannerProps)
         friendIds: [selectedFriendId],
         daysFromNow: 14,
         windowDays: 7,
-        durationMinutes: 60,
+        durationMinutes: 30,  // 30-minute meetings
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to match availability right now.')

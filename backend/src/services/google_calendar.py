@@ -76,6 +76,7 @@ class GoogleCalendarService:
         insert_kwargs: Dict[str, Any] = {
             "calendarId": "primary",
             "body": event_body,
+            "sendUpdates": "all",  # Send email invitations to all attendees
         }
         if conference_data:
             insert_kwargs["conferenceDataVersion"] = 1
@@ -91,6 +92,41 @@ class GoogleCalendarService:
             raise RuntimeError(f"Google Calendar API error: {error_reason or error}") from error
 
         return event, refreshed_payload
+
+    def list_upcoming_events(
+        self,
+        tokens: Dict[str, Any],
+        max_results: int = 10,
+        time_min: Optional[datetime] = None,
+    ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """
+        List upcoming calendar events from the primary calendar.
+        Returns (events_list, refreshed_tokens_if_any).
+        """
+        credentials, refreshed_payload = self._ensure_credentials(tokens)
+        service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+
+        if time_min is None:
+            time_min = datetime.now(timezone.utc)
+
+        try:
+            events_result = (
+                service.events()
+                .list(
+                    calendarId="primary",
+                    timeMin=time_min.isoformat(),
+                    maxResults=max_results,
+                    singleEvents=True,
+                    orderBy="startTime",
+                )
+                .execute()
+            )
+            events = events_result.get("items", [])
+        except HttpError as error:
+            error_reason = getattr(error, "reason", None)
+            raise RuntimeError(f"Google Calendar API error: {error_reason or error}") from error
+
+        return events, refreshed_payload
 
     def _ensure_credentials(self, tokens: Dict[str, Any]) -> Tuple[Credentials, Optional[Dict[str, Any]]]:
         access_token = tokens.get("access_token")

@@ -100,8 +100,14 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref MeaningfulApi
-            Path: /calendar/events
+            Path: /users/{user_id}/calendar/events
             Method: GET
+        OptionsCalendarEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /users/{user_id}/calendar/events
+            Method: OPTIONS
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable

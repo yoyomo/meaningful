@@ -20,9 +20,11 @@ export const ProfileSection = ({ userId }: ProfileSectionProps) => {
 
   useEffect(() => {
     if (profileQuery.data) {
-      setPhoneDraft(profileQuery.data.phoneNumber ?? '')
+      // Update phone draft when profile data loads or changes
+      const phone = profileQuery.data.phoneNumber
+      setPhoneDraft(phone && typeof phone === 'string' ? phone : '')
     }
-  }, [profileQuery.data?.phoneNumber])
+  }, [profileQuery.data])
 
   useEffect(() => {
     if (!success && !error) return

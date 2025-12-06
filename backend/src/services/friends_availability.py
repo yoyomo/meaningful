@@ -287,7 +287,26 @@ class FriendsAvailabilityService:
             result["searchWindow"]["startsAt"] = self._format_datetime(start_utc)
             result["searchWindow"]["endsAt"] = self._format_datetime(end_utc)
 
-        overlap_slots = self._intersect_multiple(intervals_per_participant, duration_minutes)
+        # Find overlapping free windows
+        overlap_windows = self._intersect_multiple(intervals_per_participant, duration_minutes)
+        
+        # Extract 30-minute slots from each free window (not the full window)
+        overlap_slots = []
+        for window_start, window_end in overlap_windows:
+            # Create 30-minute slots within this free window
+            current_start = window_start
+            while current_start + timedelta(minutes=duration_minutes) <= window_end:
+                slot_end = current_start + timedelta(minutes=duration_minutes)
+                overlap_slots.append((current_start, slot_end))
+                # Move to next slot (with 15-minute spacing, or back-to-back)
+                current_start = current_start + timedelta(minutes=duration_minutes)
+                # Limit to max_suggestions total
+                if len(overlap_slots) >= max_suggestions:
+                    break
+            if len(overlap_slots) >= max_suggestions:
+                break
+        
+        # Take only the requested number of suggestions
         overlap_slots = overlap_slots[:max_suggestions]
 
         if not overlap_slots:
@@ -391,7 +410,16 @@ class FriendsAvailabilityService:
         
         friend_email = friend_email.strip()
 
-        friend_name = friend.get("display_name") or friend_user.get("name") or "Friend"
+        # Get friend's name - prioritize name from user record, then display_name, avoid phone numbers
+        friend_name = friend_user.get("name")
+        if not friend_name or not isinstance(friend_name, str) or not friend_name.strip():
+            friend_name = friend.get("display_name")
+        # If display_name looks like a phone number (starts with +), use "Friend" instead
+        if friend_name and isinstance(friend_name, str) and friend_name.strip().startswith("+"):
+            friend_name = None
+        if not friend_name or not isinstance(friend_name, str) or not friend_name.strip():
+            friend_name = "Friend"
+        
         summary = title or f"Catch up with {friend_name}"
         description = notes or "Planned via Meaningful."
 
@@ -429,6 +457,11 @@ class FriendsAvailabilityService:
                     "conferenceSolutionKey": {"type": "hangoutsMeet"},
                 }
             },
+            "extendedProperties": {
+                "private": {
+                    "meaningful": "true",  # Mark events created by Meaningful app
+                }
+            },
         }
 
         try:
@@ -448,15 +481,23 @@ class FriendsAvailabilityService:
                 ) from exc
             raise ValueError(f"Failed to create calendar event: {str(exc)}") from exc
 
+        # Extract event details for response
+        event_id = event.get("id")
+        event_summary = event.get("summary")
+        event_html_link = event.get("htmlLink")
+        hangout_link = event.get("hangoutLink")
+        
+        # Fallback for hangout link from conference data
+        if not hangout_link and event.get("conferenceData", {}).get("entryPoints"):
+            hangout_link = event.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri")
+        
         return {
             "status": "scheduled",
             "event": {
-                "id": event.get("id"),
-                "summary": event.get("summary"),
-                "hangoutLink": event.get("hangoutLink") or event.get("conferenceData", {})
-                .get("entryPoints", [{}])[0]
-                .get("uri"),
-                "htmlLink": event.get("htmlLink"),
+                "id": event_id,
+                "summary": event_summary,
+                "htmlLink": event_html_link,  # URL to view event in Google Calendar
+                "hangoutLink": hangout_link,  # Google Meet link if available
                 "start": event.get("start"),
                 "end": event.get("end"),
             },

@@ -5,6 +5,7 @@ import { Card } from '../ui/Card'
 import { WelcomeSection, AvailabilityCard } from '../availability'
 import { ProfileSection } from './ProfileSection'
 import { FriendsSection } from './FriendsSection'
+import { UpcomingCallsSection } from './UpcomingCallsSection'
 
 type InvitationDetails = {
   inviterName: string | null
@@ -66,6 +67,8 @@ const HomeDashboard = ({
         </section>
 
         <ProfileSection userId={user.id} />
+
+        <UpcomingCallsSection userId={user.id} />
 
         <FriendsSection userId={user.id} />
       </main>

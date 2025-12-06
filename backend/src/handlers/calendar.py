@@ -1,6 +1,9 @@
 import os
 from typing import Dict, Any
-from utils.http_responses import create_json_response, create_error_response
+from datetime import datetime, timezone
+from utils.http_responses import create_json_response, create_error_response, create_cors_headers
+from services.google_calendar import GoogleCalendarService
+from services.database import DynamoDBService
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -8,13 +11,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Google Calendar sync and events handler
     """
     
-    http_method = event.get('httpMethod', '')
+    http_method = event.get('httpMethod', '').upper()
     path = event.get('path', '')
+    
+    # Handle CORS preflight
+    if http_method == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': create_cors_headers(),
+            'body': ''
+        }
+    
+    # Extract user_id from path if present
+    path_params = event.get("pathParameters") or {}
+    user_id = path_params.get("user_id")
     
     if path == '/calendar/sync' and http_method == 'POST':
         return handle_calendar_sync(event, context)
-    elif path == '/calendar/events' and http_method == 'GET':
-        return handle_get_events(event, context)
+    elif path and '/calendar/events' in path and http_method == 'GET':
+        return handle_get_events(event, context, user_id)
     
     return create_error_response(404, 'Not found')
 
@@ -30,12 +45,90 @@ def handle_calendar_sync(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     })
 
 
-def handle_get_events(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handle_get_events(event: Dict[str, Any], context: Any, user_id: str = None) -> Dict[str, Any]:
     """
-    Get calendar events
-    TODO: Implement calendar events retrieval from DynamoDB/Google Calendar
+    Get upcoming calendar events from Google Calendar
     """
-    return create_json_response(200, {
-        'message': 'Get events - to be implemented',
-        'events': []
-    })
+    try:
+        if not user_id:
+            # Try to get from path params if not passed
+            path_params = event.get("pathParameters") or {}
+            user_id = path_params.get("user_id")
+        
+        if not user_id:
+            return create_error_response(400, "User ID is required")
+        
+        # Get user's Google tokens
+        dynamodb_service = DynamoDBService()
+        user = dynamodb_service.get_user(user_id)
+        if not user:
+            return create_error_response(404, "User not found")
+        
+        google_tokens = user.get("google_tokens")
+        if not google_tokens or not isinstance(google_tokens, dict):
+            return create_error_response(400, "Google Calendar is not connected")
+        
+        if not google_tokens.get("refresh_token"):
+            return create_error_response(400, "Google Calendar connection is incomplete (missing refresh token)")
+        
+        # Get upcoming events
+        calendar_service = GoogleCalendarService()
+        events, refreshed_tokens = calendar_service.list_upcoming_events(
+            google_tokens,
+            max_results=10,
+        )
+        
+        # Persist refreshed tokens if any
+        if refreshed_tokens:
+            dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
+        
+        # Filter for events created by Meaningful app only
+        # Format events for frontend
+        formatted_events = []
+        for event in events:
+            # Only include events created by the Meaningful app
+            # Check extended properties first (most reliable)
+            extended_props = event.get("extendedProperties", {})
+            private_props = extended_props.get("private", {})
+            is_meaningful_event = private_props.get("meaningful") == "true"
+            
+            # Fallback: check description for "Planned via Meaningful"
+            if not is_meaningful_event:
+                description = event.get("description", "")
+                is_meaningful_event = "Planned via Meaningful" in description
+            
+            if not is_meaningful_event:
+                continue
+            
+            # Only include events that have attendees (scheduled calls with friends)
+            attendees = event.get("attendees", [])
+            if not attendees:
+                continue
+            
+            start = event.get("start", {})
+            end = event.get("end", {})
+            
+            formatted_events.append({
+                "id": event.get("id"),
+                "summary": event.get("summary", "Untitled Event"),
+                "start": start.get("dateTime") or start.get("date"),
+                "end": end.get("dateTime") or end.get("date"),
+                "htmlLink": event.get("htmlLink"),
+                "hangoutLink": event.get("hangoutLink"),
+                "attendees": [
+                    {
+                        "email": att.get("email"),
+                        "displayName": att.get("displayName"),
+                        "responseStatus": att.get("responseStatus", "needsAction"),
+                    }
+                    for att in attendees
+                ],
+            })
+        
+        return create_json_response(200, {
+            "events": formatted_events,
+        })
+    except ValueError as exc:
+        return create_error_response(400, str(exc))
+    except Exception as exc:
+        return create_error_response(500, "Failed to fetch calendar events", str(exc))
