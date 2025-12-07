@@ -2,7 +2,8 @@ import os
 from typing import Dict, Any
 from urllib.parse import quote
 from services.google_oauth import GoogleOAuthService
-from utils.http_responses import create_json_response, create_redirect_response, create_error_response
+from services.phone_auth import PhoneAuthService
+from utils.http_responses import create_json_response, create_redirect_response, create_error_response, create_cors_headers
 from utils.env import *  # Load environment variables
 
 # Constants
@@ -29,6 +30,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return handle_google_auth_initiate(event, context)
     elif path == '/auth/callback' and http_method == 'GET':
         return handle_google_auth_callback(event, context)
+    elif path == '/auth/phone/send-code' and http_method == 'POST':
+        return handle_phone_send_code(event, context)
+    elif path == '/auth/phone/verify' and http_method == 'POST':
+        return handle_phone_verify(event, context)
     
     return create_error_response(404, 'Not found')
 
@@ -96,3 +101,78 @@ def handle_google_auth_callback(event: Dict[str, Any], context: Any) -> Dict[str
             
     except Exception as e:
         return create_redirect_response(f"{FRONTEND_URL}?error=server_error")
+
+
+def handle_phone_send_code(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """
+    Send SMS verification code to phone number
+    """
+    try:
+        body = event.get('body')
+        if not body:
+            return create_error_response(400, 'Phone number is required')
+        
+        import json
+        payload = json.loads(body)
+        phone_number = payload.get('phoneNumber')
+        
+        if not phone_number or not isinstance(phone_number, str):
+            return create_error_response(400, 'Valid phone number is required')
+        
+        phone_auth = PhoneAuthService()
+        success, code, error = phone_auth.send_verification_code(phone_number)
+        
+        if success:
+            return create_json_response(200, {
+                'success': True,
+                'message': 'Verification code sent',
+                # Don't send code in production, but useful for development
+                'code': code if os.environ.get('STAGE') == 'dev' else None
+            })
+        else:
+            return create_error_response(400, error or 'Failed to send verification code')
+    
+    except json.JSONDecodeError:
+        return create_error_response(400, 'Invalid JSON payload')
+    except Exception as e:
+        return create_error_response(500, 'Failed to send verification code', str(e))
+
+
+def handle_phone_verify(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """
+    Verify SMS code and authenticate user
+    """
+    try:
+        body = event.get('body')
+        if not body:
+            return create_error_response(400, 'Phone number and code are required')
+        
+        import json
+        payload = json.loads(body)
+        phone_number = payload.get('phoneNumber')
+        code = payload.get('code')
+        
+        if not phone_number or not isinstance(phone_number, str):
+            return create_error_response(400, 'Valid phone number is required')
+        if not code or not isinstance(code, str):
+            return create_error_response(400, 'Verification code is required')
+        
+        phone_auth = PhoneAuthService()
+        success, error, user = phone_auth.verify_code(phone_number, code)
+        
+        if success and user:
+            # Redirect to frontend with user info (similar to Google OAuth flow)
+            user_id = user.get('id')
+            name = user.get('name', '')
+            phone = user.get('phone_number', phone_number)
+            
+            return create_redirect_response(
+                f"{FRONTEND_URL}?auth=success&user_id={quote(user_id)}&name={quote(name)}&phone={quote(phone)}&auth_method=phone"
+            )
+        else:
+            return create_redirect_response(f"{FRONTEND_URL}?error={quote(error or 'verification_failed')}")
+    
+    except json.JSONDecodeError:
+        return create_error_response(400, 'Invalid JSON payload')
+    except Exception as e:
+        return create_error_response(500, 'Failed to verify code', str(e))

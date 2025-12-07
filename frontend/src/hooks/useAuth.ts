@@ -301,6 +301,16 @@ export const useAuth = () => {
     setError('')
   }
 
+  const setUser = (user: AuthUser) => {
+    setCurrentUser(user)
+    queryClient.setQueryData(['user'], user)
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ user, expiresAt: Date.now() + AUTH_TTL_MS }),
+    )
+    setError('')
+  }
+
   return {
     user: currentUser,
     isUserLoading: isInitializing || userQuery.isLoading,
@@ -308,6 +318,7 @@ export const useAuth = () => {
     isSigningIn: isSigningIn || isRedirectingToGoogle,
     error,
     signOut: handleSignOut,
+    setUser,
   }
 }
 

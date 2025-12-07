@@ -13,7 +13,7 @@ const decodeParam = (value: string | null) => {
 }
 
 const App = () => {
-  const { user, isUserLoading, error, signIn, isSigningIn, signOut } = useAuth()
+  const { user, isUserLoading, error, signIn, isSigningIn, signOut, setUser } = useAuth()
   const invitation = useMemo(() => {
     const params = new URLSearchParams(window.location.search)
     return {
@@ -21,6 +21,15 @@ const App = () => {
       inviteeName: decodeParam(params.get('to')),
     }
   }, [])
+
+  const handlePhoneSignIn = (userId: string, name: string, phoneNumber: string) => {
+    // Set user directly from phone auth
+    setUser({
+      id: userId,
+      name: name || phoneNumber,
+      phoneNumber: phoneNumber,
+    })
+  }
 
   if (isUserLoading) {
     return (
@@ -53,6 +62,7 @@ const App = () => {
       loading={isSigningIn}
       error={error}
       onSignIn={signIn}
+      onPhoneSignIn={handlePhoneSignIn}
       invitation={invitation}
     />
   )
