@@ -364,10 +364,16 @@ Outputs:
       Name: !Sub 'meaningful-${Stage}-api-url'
   
   ApiUrl:
-    Description: 'API URL for OAuth redirects'
+    Description: 'API URL for OAuth redirects (set this as API_URL environment variable)'
     Value: !Sub 'https://${MeaningfulApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
     Export:
       Name: !Sub 'meaningful-${Stage}-api-base-url'
+  
+  ApiGatewayId:
+    Description: 'API Gateway ID for reference'
+    Value: !Ref MeaningfulApi
+    Export:
+      Name: !Sub 'meaningful-${Stage}-api-gateway-id'
   
   UsersTableName:
     Description: 'DynamoDB Users table name'

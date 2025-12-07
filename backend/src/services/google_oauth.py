@@ -15,14 +15,23 @@ GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 USERS_TABLE = os.environ.get('USERS_TABLE')
-# API_URL is dynamically determined from SAM template or defaults to localhost
-API_URL = os.environ.get('API_URL', 'http://localhost:3001')
+# AWS_REGION is automatically provided by Lambda runtime
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+# API_URL is dynamically determined from request context, environment variable, or defaults to localhost
+DEFAULT_API_URL = os.environ.get('API_URL', 'http://localhost:3001')
 
 class GoogleOAuthService:
-    def __init__(self):
+    def __init__(self, api_url: Optional[str] = None):
+        """
+        Initialize Google OAuth Service
+        
+        Args:
+            api_url: Optional API URL. If not provided, will use environment variable or compute from request context.
+        """
         self.client_id = GOOGLE_CLIENT_ID
         self.client_secret = GOOGLE_CLIENT_SECRET
-        self.redirect_uri = f"{API_URL}/auth/callback"
+        self.api_url = api_url or DEFAULT_API_URL
+        self.redirect_uri = f"{self.api_url}/auth/callback"
         self.frontend_url = FRONTEND_URL
         
         # Validate required credentials

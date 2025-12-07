@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from urllib.parse import quote
 from services.google_oauth import GoogleOAuthService
 from utils.http_responses import create_json_response, create_redirect_response, create_error_response
@@ -7,6 +7,26 @@ from utils.env import *  # Load environment variables
 
 # Constants
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+# AWS_REGION is automatically provided by Lambda runtime
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+
+
+def get_api_url_from_event(event: Dict[str, Any]) -> Optional[str]:
+    """
+    Extract API Gateway URL from Lambda event
+    Falls back to environment variable or localhost for local development
+    """
+    # Try to get from request context (API Gateway)
+    request_context = event.get('requestContext', {})
+    api_id = request_context.get('apiId')
+    stage = request_context.get('stage')
+    
+    if api_id and stage:
+        # Construct API Gateway URL
+        return f"https://{api_id}.execute-api.{AWS_REGION}.amazonaws.com/{stage}"
+    
+    # Fall back to environment variable or localhost
+    return os.environ.get('API_URL', 'http://localhost:3001')
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -42,7 +62,9 @@ def handle_google_auth_initiate(event: Dict[str, Any], context: Any) -> Dict[str
         user_id = query_params.get('user_id')  # Optional: check if user exists and needs consent
         force_consent = query_params.get('force_consent', 'false').lower() == 'true'
         
-        oauth_service = GoogleOAuthService()
+        # Get API URL from event context
+        api_url = get_api_url_from_event(event)
+        oauth_service = GoogleOAuthService(api_url=api_url)
         auth_url, state = oauth_service.get_authorization_url(
             user_id=user_id,
             force_consent=force_consent
@@ -73,7 +95,9 @@ def handle_google_auth_callback(event: Dict[str, Any], context: Any) -> Dict[str
         if not code:
             return create_redirect_response(f"{FRONTEND_URL}?error=no_code")
         
-        oauth_service = GoogleOAuthService()
+        # Get API URL from event context
+        api_url = get_api_url_from_event(event)
+        oauth_service = GoogleOAuthService(api_url=api_url)
         result = oauth_service.handle_callback(code, state)
         
         if result['success']:

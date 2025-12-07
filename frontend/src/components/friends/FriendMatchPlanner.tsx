@@ -72,11 +72,14 @@ const renderMatchResult = (match: FriendMatchResponse, scheduleControls?: Schedu
         <p className="text-sm font-semibold text-emerald-900">Recommended slot</p>
         <p className="text-base text-emerald-800">{formatSlotRange(match.recommendation.start, match.recommendation.end)}</p>
         <p className="text-xs text-emerald-700">{confidenceCopy}</p>
-        {scheduleControls && match.recommendation.start && match.recommendation.end && (
+        {scheduleControls && match.recommendation && match.recommendation.start && match.recommendation.end && (
           <div className="mt-3">
             <Button
               variant="secondary"
-              onClick={() => scheduleControls.onSchedule(match.recommendation)}
+              onClick={() => scheduleControls.onSchedule({
+                start: match.recommendation!.start,
+                end: match.recommendation!.end
+              })}
               disabled={scheduleControls.isDisabled}
             >
               {scheduleControls.isPending ? 'Scheduling…' : 'Schedule this slot'}

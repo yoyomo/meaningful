@@ -93,6 +93,18 @@ deploy-guided: ## Deploy SAM application with guided setup
 	@echo "☁️  Deploying SAM application (guided setup)..."
 	@cd backend && sam deploy --guided
 
+deploy-frontend: ## Deploy frontend to S3 (requires STAGE and API_URL)
+	@if [ -z "$(STAGE)" ] || [ -z "$(API_URL)" ]; then \
+		echo "❌ STAGE and API_URL required"; \
+		echo "Usage: make deploy-frontend STAGE=staging API_URL=https://..."; \
+		echo ""; \
+		echo "Or get API_URL from backend:"; \
+		echo "  API_URL=\$$(aws cloudformation describe-stacks --stack-name meaningful-backend-staging --query 'Stacks[0].Outputs[?OutputKey==\`ApiUrl\`].OutputValue' --output text)"; \
+		echo "  make deploy-frontend STAGE=staging API_URL=\$$API_URL"; \
+		exit 1; \
+	fi
+	@./scripts/deploy-frontend-s3.sh $(STAGE) $(API_URL)
+
 # Testing
 test: ## Run all tests
 	@echo "🧪 Running tests..."
