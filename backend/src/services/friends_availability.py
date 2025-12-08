@@ -11,6 +11,7 @@ from models.availability import Availability, TimeSlot
 from services.database import DynamoDBService
 from services.friends import FriendsService
 from services.google_calendar import GoogleCalendarService
+from services.sms_service import get_sms_service
 
 
 @dataclass
@@ -355,30 +356,23 @@ class FriendsAvailabilityService:
         if not owner_record:
             raise ValueError("Unable to load your profile")
 
+        # Check if Google Calendar is connected
         owner_tokens = owner_record.get("google_tokens")
-        if owner_tokens is None:
-            raise ValueError(
-                "Google Calendar is not connected. Please sign out completely, then sign back in with Google. "
-                "Make sure to grant all calendar permissions when prompted."
-            )
-        if not isinstance(owner_tokens, Dict):
-            token_type = type(owner_tokens).__name__
-            raise ValueError(
-                f"Google Calendar tokens are in an unexpected format (got {token_type}, expected dict). "
-                "Please sign out completely, then sign back in with Google to reconnect your calendar."
-            )
+        has_google_calendar = (
+            owner_tokens is not None and
+            isinstance(owner_tokens, Dict) and
+            owner_tokens.get("refresh_token") is not None
+        )
         
-        # Verify we have the required token fields
-        refresh_token = owner_tokens.get("refresh_token")
-        if not refresh_token:
-            # Log for debugging
-            import logging
-            logging.error(f"User {user_id} missing refresh_token. Token keys: {list(owner_tokens.keys())}")
-            raise ValueError(
-                "Google Calendar connection is incomplete (missing refresh token). "
-                "Please sign out completely, then sign back in with Google and grant all permissions. "
-                "You may need to revoke access at https://myaccount.google.com/permissions first."
-            )
+        # If no Google Calendar, we'll use SMS fallback
+        if not has_google_calendar:
+            # Get owner's phone number for SMS
+            owner_phone = owner_record.get("phone_number")
+            if not owner_phone:
+                raise ValueError(
+                    "Google Calendar is not connected and no phone number is available. "
+                    "Please connect Google Calendar or add a phone number to your profile."
+                )
 
         friend = self.friends_service.get_friend(user_id, friend_id)
         if not friend:
@@ -464,22 +458,69 @@ class FriendsAvailabilityService:
             },
         }
 
-        try:
-            event, refreshed_tokens = self.google_calendar_service.create_event(
-                owner_tokens,
-                event_body,
-                conference_data=True,
-            )
-            if refreshed_tokens:
-                self.dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
-        except RuntimeError as exc:
-            error_msg = str(exc).lower()
-            if any(keyword in error_msg for keyword in ["insufficient", "scope", "permission", "403", "access_denied"]):
+        # Try Google Calendar first, fallback to SMS
+        event = None
+        if has_google_calendar:
+            try:
+                event, refreshed_tokens = self.google_calendar_service.create_event(
+                    owner_tokens,
+                    event_body,
+                    conference_data=True,
+                )
+                if refreshed_tokens:
+                    self.dynamodb_service.update_user(user_id, {"google_tokens": refreshed_tokens})
+            except RuntimeError as exc:
+                error_msg = str(exc).lower()
+                if any(keyword in error_msg for keyword in ["insufficient", "scope", "permission", "403", "access_denied"]):
+                    raise ValueError(
+                        "Your Google Calendar connection is missing required permissions to create events. "
+                        "Please sign out completely, then sign back in to grant the new calendar event permissions."
+                    ) from exc
+                raise ValueError(f"Failed to create calendar event: {str(exc)}") from exc
+        else:
+            # Fallback to SMS
+            sms_service = get_sms_service()
+            
+            # Get friend's phone number
+            friend_phone = friend_user.get("phone_number")
+            if not friend_phone:
                 raise ValueError(
-                    "Your Google Calendar connection is missing required permissions to create events. "
-                    "Please sign out completely, then sign back in to grant the new calendar event permissions."
-                ) from exc
-            raise ValueError(f"Failed to create calendar event: {str(exc)}") from exc
+                    "Cannot send calendar invite: friend does not have a phone number. "
+                    "Please ask your friend to add their phone number or connect Google Calendar."
+                )
+            
+            # Send SMS to both parties
+            sms_sent_owner = sms_service.send_calendar_invite(
+                owner_phone,
+                friend_name,
+                start_dt.isoformat(),
+                end_dt.isoformat(),
+                summary,
+                description
+            )
+            sms_sent_friend = sms_service.send_calendar_invite(
+                friend_phone,
+                owner_record.get("name", "Friend"),
+                start_dt.isoformat(),
+                end_dt.isoformat(),
+                summary,
+                description
+            )
+            
+            if not sms_sent_owner and not sms_sent_friend:
+                raise ValueError(
+                    "Failed to send calendar invite via SMS. Please check your phone numbers or connect Google Calendar."
+                )
+            
+            # Create a mock event response for consistency
+            event = {
+                "id": f"sms_{uuid4()}",
+                "summary": summary,
+                "start": {"dateTime": start_dt.isoformat()},
+                "end": {"dateTime": end_dt.isoformat()},
+                "htmlLink": None,
+                "hangoutLink": None,
+            }
 
         # Extract event details for response
         event_id = event.get("id")
@@ -493,6 +534,7 @@ class FriendsAvailabilityService:
         
         return {
             "status": "scheduled",
+            "method": "google_calendar" if has_google_calendar else "sms",
             "event": {
                 "id": event_id,
                 "summary": event_summary,

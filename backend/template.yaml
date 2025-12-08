@@ -40,6 +40,7 @@ Globals:
         CALENDARS_TABLE: !Ref CalendarsTable
         CONTACTS_TABLE: !Ref ContactsTable
         FRIENDS_TABLE: !Ref FriendsTable
+        VERIFICATION_CODES_TABLE: !Ref VerificationCodesTable
         GOOGLE_CLIENT_ID: !Ref GoogleClientId
         GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
         FRONTEND_URL: !Ref FrontendUrl
@@ -80,9 +81,23 @@ Resources:
             RestApiId: !Ref MeaningfulApi
             Path: /auth/callback
             Method: GET
+        PhoneSendCode:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /auth/phone/send-code
+            Method: POST
+        PhoneVerify:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MeaningfulApi
+            Path: /auth/phone/verify
+            Method: POST
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VerificationCodesTable
 
   CalendarFunction:
     Type: AWS::Serverless::Function
@@ -355,6 +370,21 @@ Resources:
         - AttributeName: friend_id
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
+
+  VerificationCodesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'meaningful-${Stage}-verification-codes'
+      AttributeDefinitions:
+        - AttributeName: phone_number
+          AttributeType: S
+      KeySchema:
+        - AttributeName: phone_number
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
 
 Outputs:
   ApiEndpoint:
