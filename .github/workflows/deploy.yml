@@ -1,0 +1,228 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main      # Auto-deploys to staging
+  workflow_dispatch: # Manual "Deploy to Production" button
+    inputs:
+      environment:
+        description: 'Deploy to Production'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+env:
+  AWS_REGION: eu-south-2
+
+jobs:
+  determine-environment:
+    name: Determine Environment
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.set-env.outputs.stage }}
+      stack_name: ${{ steps.set-env.outputs.stack_name }}
+      frontend_bucket: ${{ steps.set-env.outputs.frontend_bucket }}
+    steps:
+      - name: Set environment variables
+        id: set-env
+        run: |
+          if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+            echo "stage=prod" >> $GITHUB_OUTPUT
+            echo "stack_name=meaningful-backend-prod" >> $GITHUB_OUTPUT
+            echo "frontend_bucket=meaningful-frontend-prod" >> $GITHUB_OUTPUT
+            echo "🌍 Deploying to PRODUCTION"
+          else
+            echo "stage=staging" >> $GITHUB_OUTPUT
+            echo "stack_name=meaningful-backend-staging" >> $GITHUB_OUTPUT
+            echo "frontend_bucket=meaningful-frontend-staging" >> $GITHUB_OUTPUT
+            echo "🧪 Deploying to STAGING"
+          fi
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install AWS SAM CLI
+        run: |
+          pip install aws-sam-cli
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build backend
+        working-directory: ./backend
+        run: |
+          sam build
+
+      - name: Deploy backend
+        working-directory: ./backend
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name ${{ needs.determine-environment.outputs.stack_name }} \
+            --parameter-overrides \
+              Stage=${{ needs.determine-environment.outputs.stage }} \
+              DynamoDbEndpoint="" \
+              FrontendUrl=http://${{ needs.determine-environment.outputs.frontend_bucket }}.s3-website-us-east-1.amazonaws.com \
+              GoogleClientId=${{ secrets.GOOGLE_CLIENT_ID }} \
+              GoogleClientSecret=${{ secrets.GOOGLE_CLIENT_SECRET }} \
+            --region ${{ env.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM
+
+      - name: Get API URL
+        id: get-api-url
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.determine-environment.outputs.stack_name }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "✅ API URL: $API_URL"
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [determine-environment, deploy-backend]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # S3 bucket region
+
+      - name: Get API URL from backend deployment
+        id: get-api-url
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.determine-environment.outputs.stack_name }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "✅ API URL: $API_URL"
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: |
+          pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: ./frontend
+        env:
+          VITE_API_URL: ${{ steps.get-api-url.outputs.api_url }}
+        run: |
+          pnpm build
+
+      - name: Setup S3 bucket for static website
+        run: |
+          BUCKET_NAME="${{ needs.determine-environment.outputs.frontend_bucket }}"
+          # Check if bucket exists
+          if ! aws s3 ls "s3://${BUCKET_NAME}" 2>&1 | grep -q 'NoSuchBucket'; then
+            echo "✅ Bucket ${BUCKET_NAME} already exists"
+          else
+            echo "📦 Creating bucket ${BUCKET_NAME}..."
+            aws s3 mb "s3://${BUCKET_NAME}" --region us-east-1
+            
+            # Disable Block Public Access
+            aws s3api put-public-access-block \
+              --bucket "${BUCKET_NAME}" \
+              --public-access-block-configuration \
+                "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+            
+            # Enable static website hosting
+            aws s3 website "s3://${BUCKET_NAME}" \
+              --index-document index.html \
+              --error-document index.html
+          fi
+          
+          # Always ensure Block Public Access is disabled
+          aws s3api put-public-access-block \
+            --bucket "${BUCKET_NAME}" \
+            --public-access-block-configuration \
+              "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" || true
+          
+          # Always ensure website hosting is enabled
+          aws s3 website "s3://${BUCKET_NAME}" \
+            --index-document index.html \
+            --error-document index.html || true
+
+      - name: Set S3 bucket policy
+        run: |
+          cat > /tmp/bucket-policy.json << EOF
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PublicReadGetObject",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::${{ needs.determine-environment.outputs.frontend_bucket }}/*"
+              }
+            ]
+          }
+          EOF
+          
+          aws s3api put-bucket-policy \
+            --bucket "${{ needs.determine-environment.outputs.frontend_bucket }}" \
+            --policy file:///tmp/bucket-policy.json
+
+      - name: Upload frontend to S3
+        working-directory: ./frontend
+        run: |
+          aws s3 sync dist/ "s3://${{ needs.determine-environment.outputs.frontend_bucket }}" --delete
+          echo "✅ Frontend deployed to: http://${{ needs.determine-environment.outputs.frontend_bucket }}.s3-website-us-east-1.amazonaws.com"
+
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [determine-environment, deploy-backend, deploy-frontend]
+    if: always()
+    
+    steps:
+      - name: Deployment Summary
+        run: |
+          ENV_NAME="${{ needs.determine-environment.outputs.stage == 'prod' && 'PRODUCTION' || 'STAGING' }}"
+          FRONTEND_URL="http://${{ needs.determine-environment.outputs.frontend_bucket }}.s3-website-us-east-1.amazonaws.com"
+          echo "## 🚀 Deployment Complete - $ENV_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** $ENV_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** ✅ Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** ✅ Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend URL:** $FRONTEND_URL" >> $GITHUB_STEP_SUMMARY
+

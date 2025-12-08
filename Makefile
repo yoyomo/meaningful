@@ -177,9 +177,23 @@ update-deps: ## Update dependencies
 	@cd backend && sam build
 
 # AWS Utilities
-logs: ## View backend logs
+logs: ## View backend logs (AuthFunction)
 	@echo "📋 Viewing backend logs..."
-	@cd backend && sam logs -n AuthFunction --stack-name meaningful-backend --tail
+	@cd backend && sam logs -n AuthFunction --stack-name meaningful-backend-staging --tail
+
+logs-auth: ## View AuthFunction logs
+	@cd backend && sam logs -n AuthFunction --stack-name meaningful-backend-staging --tail
+
+logs-calendar: ## View CalendarFunction logs
+	@cd backend && sam logs -n CalendarFunction --stack-name meaningful-backend-staging --tail
+
+logs-friends: ## View FriendsFunction logs
+	@cd backend && sam logs -n FriendsFunction --stack-name meaningful-backend-staging --tail
+
+logs-all: ## View logs for all functions (one at a time)
+	@echo "📋 Viewing logs for all functions..."
+	@echo "Press Ctrl+C to stop, then run specific log command"
+	@cd backend && sam logs -n AuthFunction --stack-name meaningful-backend-staging --tail
 
 validate: ## Validate SAM template
 	@echo "✅ Validating SAM template..."
